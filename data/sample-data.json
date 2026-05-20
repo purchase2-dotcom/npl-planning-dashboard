@@ -1,0 +1,65 @@
+{
+  "npl_list": [
+    {"code": "VAI-001", "name": "Vải cotton 100% trắng", "category": "vai", "inventory": 5000, "on_order": 2000, "leadtime": 45, "unit_price": 65000, "substitutes": ["VAI-002"]},
+    {"code": "VAI-002", "name": "Vải cotton pha trắng", "category": "vai", "inventory": 8000, "on_order": 0, "leadtime": 30, "unit_price": 58000, "substitutes": []},
+    {"code": "VAI-003", "name": "Vải kaki xanh navy", "category": "vai", "inventory": 1200, "on_order": 0, "leadtime": 60, "unit_price": 85000, "substitutes": ["VAI-004"]},
+    {"code": "VAI-004", "name": "Vải kaki xanh đen", "category": "vai", "inventory": 6500, "on_order": 1000, "leadtime": 40, "unit_price": 82000, "substitutes": []},
+    {"code": "VAI-005", "name": "Vải lụa hồng pastel", "category": "vai", "inventory": 800, "on_order": 0, "leadtime": 75, "unit_price": 120000, "substitutes": []},
+    {"code": "CHI-001", "name": "Chỉ may polyester trắng", "category": "chi", "inventory": 15000, "on_order": 5000, "leadtime": 20, "unit_price": 15000, "substitutes": ["CHI-002"]},
+    {"code": "CHI-002", "name": "Chỉ may polyester đen", "category": "chi", "inventory": 12000, "on_order": 0, "leadtime": 20, "unit_price": 15000, "substitutes": []},
+    {"code": "CHI-003", "name": "Chỉ thêu màu", "category": "chi", "inventory": 800, "on_order": 0, "leadtime": 35, "unit_price": 28000, "substitutes": []},
+    {"code": "NUT-001", "name": "Nút nhựa 15mm trắng", "category": "nut", "inventory": 25000, "on_order": 10000, "leadtime": 30, "unit_price": 500, "substitutes": ["NUT-002"]},
+    {"code": "NUT-002", "name": "Nút nhựa 15mm đen", "category": "nut", "inventory": 18000, "on_order": 0, "leadtime": 30, "unit_price": 500, "substitutes": []},
+    {"code": "NUT-003", "name": "Khóa kéo YKK 20cm", "category": "nut", "inventory": 3000, "on_order": 2000, "leadtime": 50, "unit_price": 8500, "substitutes": []},
+    {"code": "NUT-004", "name": "Khóa kéo thường 20cm", "category": "nut", "inventory": 5500, "on_order": 0, "leadtime": 35, "unit_price": 4500, "substitutes": []},
+    {"code": "PK-001", "name": "Nhãn dệt logo", "category": "phukien", "inventory": 12000, "on_order": 8000, "leadtime": 25, "unit_price": 800, "substitutes": []},
+    {"code": "PK-002", "name": "Túi PE đóng gói", "category": "phukien", "inventory": 30000, "on_order": 0, "leadtime": 15, "unit_price": 200, "substitutes": []},
+    {"code": "PK-003", "name": "Thẻ bài giấy", "category": "phukien", "inventory": 8000, "on_order": 5000, "leadtime": 20, "unit_price": 350, "substitutes": []},
+    {"code": "PK-004", "name": "Băng dán nhãn", "category": "phukien", "inventory": 500, "on_order": 0, "leadtime": 45, "unit_price": 1200, "substitutes": []}
+  ],
+  "production_plan": [
+    {"product_id": "SP001", "product_name": "Áo sơ mi trắng", "quantity": 5000, "start_date": "2026-06-15"},
+    {"product_id": "SP002", "product_name": "Quần kaki navy", "quantity": 3000, "start_date": "2026-07-01"},
+    {"product_id": "SP003", "product_name": "Đầm lụa", "quantity": 1500, "start_date": "2026-08-15"},
+    {"product_id": "SP004", "product_name": "Áo polo basic", "quantity": 4000, "start_date": "2026-09-01"},
+    {"product_id": "SP005", "product_name": "Quần short kaki", "quantity": 2500, "start_date": "2026-10-15"},
+    {"product_id": "SP006", "product_name": "Áo khoác mùa thu", "quantity": 2000, "start_date": "2026-11-30"},
+    {"product_id": "SP007", "product_name": "Váy công sở", "quantity": 1800, "start_date": "2026-12-15"}
+  ],
+  "bom": [
+    {"product_id": "SP001", "npl_code": "VAI-001", "usage_per_unit": 1.8},
+    {"product_id": "SP001", "npl_code": "CHI-001", "usage_per_unit": 0.5},
+    {"product_id": "SP001", "npl_code": "NUT-001", "usage_per_unit": 8},
+    {"product_id": "SP001", "npl_code": "PK-001", "usage_per_unit": 1},
+    {"product_id": "SP001", "npl_code": "PK-002", "usage_per_unit": 1},
+    {"product_id": "SP001", "npl_code": "PK-003", "usage_per_unit": 1},
+
+    {"product_id": "SP002", "npl_code": "VAI-003", "usage_per_unit": 1.5},
+    {"product_id": "SP002", "npl_code": "CHI-002", "usage_per_unit": 0.4},
+    {"product_id": "SP002", "npl_code": "NUT-003", "usage_per_unit": 1},
+    {"product_id": "SP002", "npl_code": "PK-001", "usage_per_unit": 1},
+    {"product_id": "SP002", "npl_code": "PK-002", "usage_per_unit": 1},
+
+    {"product_id": "SP003", "npl_code": "VAI-005", "usage_per_unit": 2.0},
+    {"product_id": "SP003", "npl_code": "CHI-003", "usage_per_unit": 0.6},
+    {"product_id": "SP003", "npl_code": "NUT-003", "usage_per_unit": 1},
+    {"product_id": "SP003", "npl_code": "PK-004", "usage_per_unit": 1},
+
+    {"product_id": "SP004", "npl_code": "VAI-001", "usage_per_unit": 1.0},
+    {"product_id": "SP004", "npl_code": "CHI-001", "usage_per_unit": 0.3},
+    {"product_id": "SP004", "npl_code": "NUT-001", "usage_per_unit": 3},
+
+    {"product_id": "SP005", "npl_code": "VAI-003", "usage_per_unit": 0.8},
+    {"product_id": "SP005", "npl_code": "CHI-002", "usage_per_unit": 0.3},
+    {"product_id": "SP005", "npl_code": "NUT-003", "usage_per_unit": 1},
+
+    {"product_id": "SP006", "npl_code": "VAI-003", "usage_per_unit": 2.2},
+    {"product_id": "SP006", "npl_code": "CHI-002", "usage_per_unit": 0.7},
+    {"product_id": "SP006", "npl_code": "NUT-003", "usage_per_unit": 1},
+    {"product_id": "SP006", "npl_code": "PK-004", "usage_per_unit": 1},
+
+    {"product_id": "SP007", "npl_code": "VAI-005", "usage_per_unit": 1.8},
+    {"product_id": "SP007", "npl_code": "CHI-003", "usage_per_unit": 0.5},
+    {"product_id": "SP007", "npl_code": "NUT-003", "usage_per_unit": 1}
+  ]
+}
