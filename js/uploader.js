@@ -182,6 +182,27 @@ const NPLUploader = (function() {
         return result;
     }
 
+    function parseProductionPlan(workbook) {
+        const sheet = workbook.Sheets['Kế hoạch sản xuất'] || workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
+        return rows.map(r => {
+            const code = clean(r['Mã sản phẩm']);
+            if (!code) return null;
+            const monthly = [];
+            for (let m = 0; m <= 11; m++) monthly.push(toNum(r['SL T' + m]));
+            return {
+                product_id: code,
+                product_name: clean(r['Tên sản phẩm']),
+                unit: clean(r['Đơn vị tính']),
+                monthly: monthly,
+                total: monthly.reduce(function (s, v) { return s + v; }, 0),
+                q1: toNum(r['SL Q1']),
+                q2: toNum(r['SL Q2']),
+                q3: toNum(r['SL Q3'])
+            };
+        }).filter(Boolean);
+    }
+
     function parseDemandTotal(workbook) {
         const sheet = workbook.Sheets['Báo cáo nguyên phụ liệu'] || workbook.Sheets[workbook.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
@@ -260,10 +281,27 @@ const NPLUploader = (function() {
                         merged.demand_per_product = merged.demand_per_product.concat(rows);
                         count = rows.length;
                     } else if (type === 'production_plan') {
-                        const sheet = wb.Sheets[wb.SheetNames[0]];
-                        const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
-                        merged.production_plan = merged.production_plan.concat(rows);
-                        count = rows.length;
+                        const data = parseProductionPlan(wb);
+                        merged.production_plan = merged.production_plan.concat(data);
+                        count = data.length;
+                    } else {
+                        throw new Error('File chưa nhận diện. Sheets: ' + wb.SheetNames.join(', '));
+                    }
+                } else {
+                    throw new Error('Định dạng không hỗ trợ');
+                }
+                fileInfo.push({ name: name, ok: true, type: type, parsed: { count: count, groups: groups } });
+            } catch (err) {
+                fileInfo.push({ name: name, ok: false, error: err.message });
+            }
+        }
+        return { data: merged, fileInfo: fileInfo };
+    }
+
+    return { parseFiles: parseFiles, ALLOWED_WAREHOUSES: ALLOWED_WAREHOUSES, ORDER_TOLERANCE: ORDER_TOLERANCE };
+})();
+            merged.production_plan = merged.production_plan.concat(data);
+                        count = data.length;
                     } else {
                         throw new Error('File chưa nhận diện. Sheets: ' + wb.SheetNames.join(', '));
                     }

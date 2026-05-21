@@ -31,6 +31,7 @@
                     <div class="nav-label">Quản lý</div>
                     <a href="#" class="nav-item" data-page="purchase"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span>Kế hoạch mua</span><span class="nav-badge" id="nav-purchase-count">0</span></a>
                     <a href="#" class="nav-item" data-page="expiry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span>Hạn dùng</span><span class="nav-badge" id="nav-expiry-count">0</span></a>
+                    <a href="#" class="nav-item" data-page="production"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg><span>Kế hoạch SX</span></a>
                     <a href="#" class="nav-item" data-page="warnings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>Cảnh báo</span><span class="nav-badge" id="nav-warning-count">0</span></a>
                 </div>
                 <div class="nav-group">
@@ -173,6 +174,30 @@
                             <table class="data-table">
                                 <thead><tr><th>Mã NPL</th><th>Tên</th><th class="text-right">Đã hết hạn</th><th class="text-right">Hết ≤ 3T</th><th class="text-right">Hết ≤ 6T</th><th class="text-right">Hết ≤ 12T</th><th class="text-right">Tổng tồn</th><th class="text-right">Nhu cầu 6T</th><th>Rủi ro</th></tr></thead>
                                 <tbody id="expiry-table"><tr><td colspan="9" class="empty-state">Chưa có dữ liệu</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="page" data-page="production" hidden>
+                    <div class="card">
+                        <div class="card-header">
+                            <div><h3>Kế hoạch sản xuất (KHSX)</h3><p class="card-sub">Sản lượng dự kiến từng sản phẩm theo T0-T11</p></div>
+                            <div class="card-actions">
+                                <input type="text" id="prod-search" placeholder="Tìm mã hoặc tên sản phẩm..." class="input-search" />
+                            </div>
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead><tr>
+                                    <th>Mã SP</th><th>Tên sản phẩm</th><th>ĐVT</th>
+                                    <th class="text-right">T0</th><th class="text-right">T1</th><th class="text-right">T2</th>
+                                    <th class="text-right">T3</th><th class="text-right">T4</th><th class="text-right">T5</th>
+                                    <th class="text-right">T6</th><th class="text-right">T7</th><th class="text-right">T8</th>
+                                    <th class="text-right">T9</th><th class="text-right">T10</th><th class="text-right">T11</th>
+                                    <th class="text-right">Tổng</th>
+                                </tr></thead>
+                                <tbody id="production-table"><tr><td colspan="16" class="empty-state">Chưa có dữ liệu KHSX</td></tr></tbody>
                             </table>
                         </div>
                     </div>

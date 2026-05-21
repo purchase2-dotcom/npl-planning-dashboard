@@ -13,6 +13,7 @@ const App = {
         purchase:  { title: 'Kế hoạch mua', sub: 'Chi tiết NPL cần mua phân theo mức khẩn cấp' },
         expiry:    { title: 'Quản lý hạn dùng', sub: 'NPL có lô gần hết hạn cần ưu tiên dùng' },
         warnings:  { title: 'Cảnh báo', sub: 'Tổng hợp các vấn đề cần xử lý' },
+        production:{ title: 'Kế hoạch sản xuất', sub: 'Sản lượng dự kiến từng sản phẩm T0-T11' },
         settings:  { title: 'Cài đặt', sub: 'Cấu hình bộ lọc và mức khẩn' }
     },
 
@@ -47,7 +48,31 @@ const App = {
         this.renderPurchase();
         this.renderExpiry();
         this.renderWarnings();
+        this.renderProduction();
         this.populateFilters();
+    },
+
+    renderProduction() {
+        const tbody = document.getElementById('production-table');
+        if (!tbody) return;
+        const list = (this.state.rawData && this.state.rawData.production_plan) || [];
+        const q = (this.state.filters.prod_search || '').toLowerCase();
+        const filtered = q ? list.filter(p =>
+            p.product_id.toLowerCase().indexOf(q) >= 0 || (p.product_name || '').toLowerCase().indexOf(q) >= 0
+        ) : list;
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="16" class="empty-state">' + (list.length === 0 ? 'Chưa có KHSX, upload file KHSX để xem' : 'Không có sản phẩm phù hợp') + '</td></tr>';
+            return;
+        }
+        const self = this;
+        tbody.innerHTML = filtered.slice(0, 200).map(p => {
+            const cells = p.monthly.map(v => '<td class="text-right">' + (v ? self.fmt(v) : '—') + '</td>').join('');
+            return '<tr><td><span class="npl-code">' + p.product_id + '</span></td>' +
+                '<td>' + self.escape(p.product_name || '—') + '</td>' +
+                '<td>' + (p.unit || '—') + '</td>' +
+                cells +
+                '<td class="text-right"><strong>' + self.fmt(p.total) + '</strong></td></tr>';
+        }).join('');
     },
 
     renderKPIs() {
@@ -303,7 +328,7 @@ const App = {
         try {
             const out = await NPLUploader.parseFiles(Array.from(files));
             if (this.state.rawData) {
-                ['npl_master', 'inventory_lots', 'demand_total', 'incoming_orders'].forEach(k => {
+                ['npl_master', 'inventory_lots', 'demand_total', 'incoming_orders', 'production_plan'].forEach(k => {
                     if (out.data[k] && out.data[k].length) this.state.rawData[k] = out.data[k];
                 });
                 if (out.data.substitute_groups && Object.keys(out.data.substitute_groups).length) {
@@ -340,7 +365,8 @@ const App = {
             '<div class="summary-card"><div class="summary-num">' + Object.keys(d.substitute_groups || {}).length + '</div><div class="summary-label">Nhóm thay thế</div></div>' +
             '<div class="summary-card"><div class="summary-num">' + (d.inventory_lots || []).length + '</div><div class="summary-label">Lô tồn kho</div></div>' +
             '<div class="summary-card"><div class="summary-num">' + (d.demand_total || []).length + '</div><div class="summary-label">NPL có nhu cầu</div></div>' +
-            '<div class="summary-card"><div class="summary-num">' + (d.incoming_orders || []).length + '</div><div class="summary-label">PO đang về</div></div>';
+            '<div class="summary-card"><div class="summary-num">' + (d.incoming_orders || []).length + '</div><div class="summary-label">PO đang về</div></div>' +
+            '<div class="summary-card"><div class="summary-num">' + (d.production_plan || []).length + '</div><div class="summary-label">SP trong KHSX</div></div>';
     },
 
     exportCSV() {
@@ -394,6 +420,28 @@ const App = {
         document.getElementById('filter-urgency').addEventListener('change', e => { self.state.filters.urgency = e.target.value; self.renderPurchase(); });
         document.getElementById('filter-purchase-type').addEventListener('change', e => { self.state.filters.purchase_type = e.target.value; self.renderPurchase(); });
         document.getElementById('filter-expiry').addEventListener('change', e => { self.state.filters.expiry = e.target.value; self.renderExpiry(); });
+        const prodSearch = document.getElementById('prod-search');
+        if (prodSearch) prodSearch.addEventListener('input', e => { self.state.filters.prod_search = e.target.value; self.renderProduction(); });
+        document.getElementById('btn-export').addEventListener('click', () => self.exportCSV());
+        const zone = document.getElementById('upload-zone');
+        const input = document.getElementById('file-input');
+        zone.addEventListener('click', () => input.click());
+        document.getElementById('upload-browse').addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); input.click(); });
+        input.addEventListener('change', e => self.handleFiles(e.target.files));
+        ['dragenter', 'dragover'].forEach(ev => zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.add('dragover'); }));
+        ['dragleave', 'drop'].forEach(ev => zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.remove('dragover'); }));
+        zone.addEventListener('drop', e => { e.preventDefault(); self.handleFiles(e.dataTransfer.files); });
+        document.getElementById('btn-save-settings').addEventListener('click', () => self.saveSettings());
+        document.getElementById('modal-close').addEventListener('click', () => self.closeDetail());
+        document.getElementById('modal-backdrop').addEventListener('click', e => { if (e.target.id === 'modal-backdrop') self.closeDetail(); });
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => App.init());
+   document.getElementById('filter-purchase-type').addEventListener('change', e => { self.state.filters.purchase_type = e.target.value; self.renderPurchase(); });
+        document.getElementById('filter-expiry').addEventListener('change', e => { self.state.filters.expiry = e.target.value; self.renderExpiry(); });
+        const prodSearch = document.getElementById('prod-search');
+        if (prodSearch) prodSearch.addEventListener('input', e => { self.state.filters.prod_search = e.target.value; self.renderProduction(); });
         document.getElementById('btn-export').addEventListener('click', () => self.exportCSV());
         const zone = document.getElementById('upload-zone');
         const input = document.getElementById('file-input');
