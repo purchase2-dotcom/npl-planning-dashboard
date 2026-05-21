@@ -1,249 +1,235 @@
 /**
- * ============================================================
- *  NPL CALCULATOR - Logic tính toán kế hoạch mua hàng NPL
- * ============================================================
- *
- *  Các công thức cốt lõi:
- *  ----------------------
- *  1) Nhu cầu NPL trong giai đoạn N tháng:
- *     demand_N  =  Σ (sản_lượng_sp_i × định_mức_npl_i)
- *
- *  2) Lượng cần mua (purchase):
- *     purchase  =  max(0,  demand - inventory - on_order + safety_stock)
- *
- *     Trong đó:
- *       - inventory : tồn kho hiện tại
- *       - on_order  : số lượng đang trên đường (đã đặt nhưng chưa về)
- *       - safety_stock : tồn kho an toàn (= demand × safety_ratio)
- *
- *  3) Ngày cần đặt hàng (order date):
- *     order_date  =  production_start_date  −  leadtime_days  −  buffer_days
- *
- *  4) Trạng thái cảnh báo (status):
- *     - ok      : inventory ≥ demand
- *     - warning : inventory < demand  &&  (today + leadtime) ≤ production_start
- *     - danger  : inventory < demand  &&  (today + leadtime) >  production_start
- *
- *  5) NPL thay thế được ưu tiên khi:
- *     - NPL chính ở trạng thái 'danger' (không kịp leadtime)
- *     - HOẶC tồn kho NPL chính < ngưỡng tối thiểu
- *     - VÀ có NPL thay thế khả dụng (inventory_substitute > 0)
- * ============================================================
+ * CALCULATOR v3 - Logic kế hoạch mua NPL
  */
-
 const NPLCalculator = (function() {
-
-    // --- Constants ---
-    const SAFETY_STOCK_RATIO = 0.10;   // 10% nhu cầu làm tồn kho an toàn
-    const BUFFER_DAYS = 7;             // Buffer 7 ngày phòng rủi ro vận chuyển
-    const MIN_INVENTORY_THRESHOLD = 0.20; // Tồn kho dưới 20% nhu cầu => cảnh báo
-
-    /**
-     * Tính nhu cầu NPL từ kế hoạch sản xuất
-     * @param {Array} productionPlan - [{product_id, quantity, start_date}]
-     * @param {Array} bom - Bill of Materials [{product_id, npl_code, usage_per_unit}]
-     * @param {number} months - 3, 6, hoặc 8
-     */
-    function calculateDemand(productionPlan, bom, months) {
-        const today = new Date();
-        const endDate = new Date(today);
-        endDate.setMonth(endDate.getMonth() + months);
-
-        const demandByNPL = {};
-
-        productionPlan.forEach(plan => {
-            const startDate = new Date(plan.start_date);
-            // Chỉ tính các plan trong giai đoạn
-            if (startDate > endDate) return;
-
-            const productBOM = bom.filter(b => b.product_id === plan.product_id);
-            productBOM.forEach(item => {
-                const totalUsage = plan.quantity * item.usage_per_unit;
-                demandByNPL[item.npl_code] = (demandByNPL[item.npl_code] || 0) + totalUsage;
-            });
-        });
-
-        return demandByNPL;
-    }
-
-    /**
-     * Tính lượng cần mua cho 1 NPL
-     */
-    function calculatePurchase(npl, demand, period) {
-        const safetyStock = demand * SAFETY_STOCK_RATIO;
-        const purchase = Math.max(
-            0,
-            demand - (npl.inventory || 0) - (npl.on_order || 0) + safetyStock
-        );
-
-        return {
-            npl_code: npl.code,
-            npl_name: npl.name,
-            category: npl.category,
-            inventory: npl.inventory || 0,
-            on_order: npl.on_order || 0,
-            demand: Math.round(demand),
-            safety_stock: Math.round(safetyStock),
-            purchase: Math.round(purchase),
-            leadtime: npl.leadtime,
-            unit_price: npl.unit_price || 0,
-            total_cost: Math.round(purchase * (npl.unit_price || 0)),
-            substitutes: npl.substitutes || []
-        };
-    }
-
-    /**
-     * Xác định trạng thái cảnh báo
-     */
-    function determineStatus(item, productionStartDate) {
-        const today = new Date();
-        const start = productionStartDate ? new Date(productionStartDate) : new Date(today.getTime() + 90*24*60*60*1000);
-        const daysUntilProduction = Math.floor((start - today) / (1000 * 60 * 60 * 24));
-
-        // Đủ hàng
-        if (item.inventory >= item.demand) {
-            return { status: 'ok', label: 'Đủ hàng' };
-        }
-
-        // Tính được kịp leadtime không
-        const totalLeadDays = item.leadtime + BUFFER_DAYS;
-
-        if (daysUntilProduction >= totalLeadDays) {
-            return { status: 'warning', label: 'Cần đặt thêm' };
-        } else {
-            return { status: 'danger', label: 'Thiếu gấp' };
-        }
-    }
-
-    /**
-     * Tính ngày cần đặt hàng (working backwards from production start)
-     */
-    function calculateOrderDate(productionStartDate, leadtime) {
-        const start = new Date(productionStartDate);
-        start.setDate(start.getDate() - leadtime - BUFFER_DAYS);
-        return start;
-    }
-
-    /**
-     * Kiểm tra & đề xuất sử dụng NPL thay thế
-     */
-    function suggestSubstitute(mainNPL, substitutes, demand) {
-        if (mainNPL.status !== 'danger' && mainNPL.inventory >= demand * MIN_INVENTORY_THRESHOLD) {
-            return null;
-        }
-
-        // Tìm NPL thay thế có đủ tồn kho hoặc leadtime ngắn hơn
-        const viable = substitutes.filter(sub =>
-            sub.inventory >= demand * 0.5 || sub.leadtime < mainNPL.leadtime
-        );
-
-        if (viable.length === 0) return null;
-
-        // Ưu tiên: tồn kho cao nhất, sau đó leadtime ngắn nhất
-        viable.sort((a, b) => {
-            if (b.inventory !== a.inventory) return b.inventory - a.inventory;
-            return a.leadtime - b.leadtime;
-        });
-
-        return viable[0];
-    }
-
-    /**
-     * Generate cảnh báo dạng ngôn ngữ tự nhiên
-     */
-    function generateWarnings(items, period) {
-        const warnings = [];
-        const dangerItems = items.filter(i => i.statusInfo.status === 'danger');
-        const warningItems = items.filter(i => i.statusInfo.status === 'warning');
-
-        if (dangerItems.length > 0) {
-            warnings.push({
-                level: 'critical',
-                title: `${dangerItems.length} NPL có nguy cơ thiếu hàng nghiêm trọng`,
-                desc: `Các NPL sau không kịp leadtime cho giai đoạn ${period} tháng: ${dangerItems.slice(0,5).map(i=>i.npl_code).join(', ')}${dangerItems.length>5?'...':''}. Cần xử lý ngay - cân nhắc dùng NPL thay thế hoặc đẩy nhanh sản xuất.`
-            });
-        }
-
-        if (warningItems.length > 0) {
-            warnings.push({
-                level: 'warning',
-                title: `${warningItems.length} NPL cần đặt hàng trong tuần này`,
-                desc: `Còn vừa đủ thời gian leadtime. Hành động: đặt PO ngay để đảm bảo về kịp ngày sản xuất.`
-            });
-        }
-
-        const substituteItems = items.filter(i => i.suggestedSubstitute);
-        if (substituteItems.length > 0) {
-            warnings.push({
-                level: 'info',
-                title: `${substituteItems.length} NPL nên dùng phương án thay thế`,
-                desc: `Hệ thống đề xuất NPL thay thế dựa trên tồn kho và leadtime ngắn hơn. Kiểm tra cột "NPL thay thế" để biết chi tiết.`
-            });
-        }
-
-        return warnings;
-    }
-
-    /**
-     * Main entry point - xử lý toàn bộ dữ liệu
-     */
-    function processAll(rawData, period) {
-        const { npl_list, production_plan, bom } = rawData;
-
-        const demandByNPL = calculateDemand(production_plan, bom, period);
-
-        const items = npl_list.map(npl => {
-            const demand = demandByNPL[npl.code] || 0;
-            const purchaseInfo = calculatePurchase(npl, demand, period);
-            const earliestStart = production_plan
-                .filter(p => bom.some(b => b.npl_code === npl.code && b.product_id === p.product_id))
-                .map(p => new Date(p.start_date))
-                .sort((a,b) => a-b)[0];
-
-            const statusInfo = determineStatus({
-                inventory: npl.inventory,
-                demand: demand,
-                leadtime: npl.leadtime
-            }, earliestStart);
-
-            const orderDate = earliestStart ? calculateOrderDate(earliestStart, npl.leadtime) : null;
-
-            // Tìm NPL thay thế
-            const substitutesData = (npl.substitutes || []).map(subCode => {
-                return npl_list.find(n => n.code === subCode);
-            }).filter(Boolean);
-
-            const suggestedSub = suggestSubstitute(
-                { ...npl, status: statusInfo.status },
-                substitutesData,
-                demand
-            );
-
-            return {
-                ...purchaseInfo,
-                statusInfo,
-                orderDate,
-                productionStart: earliestStart,
-                suggestedSubstitute: suggestedSub
-            };
-        });
-
-        const warnings = generateWarnings(items, period);
-
-        return { items, warnings };
-    }
-
-    return {
-        processAll,
-        calculateDemand,
-        calculatePurchase,
-        determineStatus,
-        calculateOrderDate,
-        suggestSubstitute,
-        CONSTANTS: {
-            SAFETY_STOCK_RATIO,
-            BUFFER_DAYS,
-            MIN_INVENTORY_THRESHOLD
-        }
+    const CONFIG = {
+        URGENCY_T0_MONTHS: 0,
+        URGENCY_HIGH_MONTHS: 2,
+        URGENCY_MED_MONTHS: 5,
+        URGENCY_LOW_MONTHS: 8,
+        EXPIRY_WARN_MONTHS: [3, 6, 12],
+        BUYER_FILTER: 'My'
     };
+
+    function buildFamilyMap(npl_master, substitute_groups) {
+        const codeToGroups = {};
+        Object.keys(substitute_groups).forEach(grp => {
+            substitute_groups[grp].forEach(m => {
+                if (!codeToGroups[m.code]) codeToGroups[m.code] = [];
+                codeToGroups[m.code].push(grp);
+            });
+        });
+        npl_master.forEach(m => {
+            if (m.substitute_group) {
+                if (!codeToGroups[m.code]) codeToGroups[m.code] = [];
+                if (codeToGroups[m.code].indexOf(m.substitute_group) === -1) codeToGroups[m.code].push(m.substitute_group);
+                if (!substitute_groups[m.substitute_group]) substitute_groups[m.substitute_group] = [];
+                if (!substitute_groups[m.substitute_group].find(x => x.code === m.code)) {
+                    substitute_groups[m.substitute_group].push({ code: m.code, origin: m.origin, buyer: m.buyer });
+                }
+            }
+        });
+        const parentMap = {}, childrenMap = {};
+        npl_master.forEach(m => {
+            if (m.parent_code && m.parent_code !== m.code) {
+                parentMap[m.code] = m.parent_code;
+                if (!childrenMap[m.parent_code]) childrenMap[m.parent_code] = [];
+                childrenMap[m.parent_code].push(m.code);
+            }
+        });
+        const familyMap = {};
+        npl_master.forEach(m => {
+            const family = new Set([m.code]);
+            (codeToGroups[m.code] || []).forEach(grp => {
+                (substitute_groups[grp] || []).forEach(mem => family.add(mem.code));
+            });
+            if (parentMap[m.code]) family.add(parentMap[m.code]);
+            (childrenMap[m.code] || []).forEach(c => family.add(c));
+            const second = new Set(family);
+            second.forEach(code => {
+                (codeToGroups[code] || []).forEach(grp => {
+                    (substitute_groups[grp] || []).forEach(m2 => family.add(m2.code));
+                });
+                if (parentMap[code]) family.add(parentMap[code]);
+                (childrenMap[code] || []).forEach(c => family.add(c));
+            });
+            familyMap[m.code] = Array.from(family);
+        });
+        return familyMap;
+    }
+
+    function aggregateInventory(lots) {
+        const byCode = {};
+        lots.forEach(lot => {
+            if (!byCode[lot.code]) byCode[lot.code] = { total: 0, lots: [], by_warehouse: {} };
+            byCode[lot.code].total += lot.stock;
+            byCode[lot.code].lots.push(lot);
+            byCode[lot.code].by_warehouse[lot.warehouse] = (byCode[lot.code].by_warehouse[lot.warehouse] || 0) + lot.stock;
+        });
+        return byCode;
+    }
+
+    function aggregateIncoming(orders) {
+        const byCode = {};
+        orders.forEach(po => {
+            if (!byCode[po.code]) byCode[po.code] = { total: 0, pos: [] };
+            byCode[po.code].total += po.on_order;
+            byCode[po.code].pos.push(po);
+        });
+        return byCode;
+    }
+
+    function analyzeExpiry(lots) {
+        const today = new Date();
+        const monthsDiff = (d1, d2) => (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
+        let expired = 0, expiring_3m = 0, expiring_6m = 0, expiring_12m = 0;
+        const expiringLots = [];
+        lots.forEach(lot => {
+            if (!lot.expiry) return;
+            const expDate = new Date(lot.expiry);
+            if (isNaN(expDate)) return;
+            const months = monthsDiff(today, expDate);
+            if (months < 0) { expired += lot.stock; expiringLots.push({...lot, months_left: months, status: 'expired'}); }
+            else if (months <= 3) { expiring_3m += lot.stock; expiringLots.push({...lot, months_left: months, status: 'expiring_3m'}); }
+            else if (months <= 6) { expiring_6m += lot.stock; expiringLots.push({...lot, months_left: months, status: 'expiring_6m'}); }
+            else if (months <= 12) { expiring_12m += lot.stock; expiringLots.push({...lot, months_left: months, status: 'expiring_12m'}); }
+        });
+        return { expired, expiring_3m, expiring_6m, expiring_12m, lots: expiringLots };
+    }
+
+    function determineUrgency(shortageByMonth, leadtimeMonths) {
+        for (let m = 0; m <= 11; m++) {
+            if (shortageByMonth[m] > 0) {
+                if (m === 0) return { level: 'CRITICAL', label: 'Cực gấp', score: 4 };
+                if (m <= (leadtimeMonths || 1)) return { level: 'CRITICAL', label: 'Cực gấp', score: 4 };
+                if (m <= CONFIG.URGENCY_HIGH_MONTHS) return { level: 'HIGH', label: 'Cao', score: 3 };
+                if (m <= CONFIG.URGENCY_MED_MONTHS) return { level: 'MEDIUM', label: 'Trung bình', score: 2 };
+                if (m <= CONFIG.URGENCY_LOW_MONTHS) return { level: 'LOW', label: 'Thấp', score: 1 };
+            }
+        }
+        return { level: 'OK', label: 'Đủ hàng', score: 0 };
+    }
+
+    function processAll(rawData, options) {
+        const opts = Object.assign({ buyerFilter: CONFIG.BUYER_FILTER }, options || {});
+        const npl_master = rawData.npl_master || [];
+        const substitute_groups = rawData.substitute_groups || {};
+        const inventory_lots = rawData.inventory_lots || [];
+        const demand_total = rawData.demand_total || [];
+        const incoming_orders = rawData.incoming_orders || [];
+
+        const familyMap = buildFamilyMap(npl_master, substitute_groups);
+        const invByCode = aggregateInventory(inventory_lots);
+        const incomingByCode = aggregateIncoming(incoming_orders);
+        const demandByCode = {};
+        demand_total.forEach(d => demandByCode[d.code] = d);
+        const masterByCode = {};
+        npl_master.forEach(m => masterByCode[m.code] = m);
+
+        const items = npl_master.map(npl => {
+            const family = familyMap[npl.code] || [npl.code];
+            const breakdown = family.map(code => {
+                const inv = invByCode[code] || { total: 0, lots: [], by_warehouse: {} };
+                const master = masterByCode[code];
+                return {
+                    code, name: master ? master.name : '',
+                    inventory: inv.total, lots: inv.lots, by_warehouse: inv.by_warehouse,
+                    is_self: code === npl.code
+                };
+            }).filter(b => b.is_self || b.inventory > 0);
+            const totalFamilyInv = breakdown.reduce((s, b) => s + b.inventory, 0);
+            const dem = demandByCode[npl.code];
+            const monthlyDemand = dem ? dem.demand.map(d => d.need) : new Array(12).fill(0);
+            const incoming = incomingByCode[npl.code] || { total: 0, pos: [] };
+
+            let bal = totalFamilyInv + incoming.total;
+            const shortageByMonth = [], balanceByMonth = [];
+            for (let m = 0; m <= 11; m++) {
+                bal -= monthlyDemand[m];
+                balanceByMonth.push(bal);
+                shortageByMonth.push(bal < 0 ? -bal : 0);
+                if (bal < 0) bal = 0;
+            }
+            const shortage_t0 = shortageByMonth[0];
+            const shortage_3m = shortageByMonth.slice(0, 3).reduce((s, v) => s + v, 0);
+            const shortage_6m = shortageByMonth.slice(0, 6).reduce((s, v) => s + v, 0);
+            const shortage_9m = shortageByMonth.slice(0, 9).reduce((s, v) => s + v, 0);
+            const urgency = determineUrgency(shortageByMonth, npl.leadtime_months);
+            const selfLots = (invByCode[npl.code] || { lots: [] }).lots;
+            const expiry = analyzeExpiry(selfLots);
+            const subGroupMembers = npl.substitute_group ? (substitute_groups[npl.substitute_group] || []) : [];
+
+            return Object.assign({}, npl, {
+                family_codes: family, family_breakdown: breakdown,
+                total_family_inventory: totalFamilyInv,
+                self_inventory: (invByCode[npl.code] || { total: 0 }).total,
+                monthly_demand: monthlyDemand,
+                shortage_by_month: shortageByMonth, balance_by_month: balanceByMonth,
+                shortage_t0, shortage_3m, shortage_6m, shortage_9m,
+                purchase_t0: shortage_t0, purchase_3m: shortage_3m, purchase_6m: shortage_6m, purchase_9m: shortage_9m,
+                incoming_total: incoming.total, incoming_pos: incoming.pos,
+                urgency, expiry, substitute_group_members: subGroupMembers
+            });
+        });
+
+        const filtered = opts.buyerFilter ? items.filter(i => i.buyer === opts.buyerFilter) : items;
+        const warnings = generateWarnings(filtered);
+        const stats = {
+            total_npl: filtered.length,
+            critical: filtered.filter(i => i.urgency.level === 'CRITICAL').length,
+            high: filtered.filter(i => i.urgency.level === 'HIGH').length,
+            medium: filtered.filter(i => i.urgency.level === 'MEDIUM').length,
+            low: filtered.filter(i => i.urgency.level === 'LOW').length,
+            ok: filtered.filter(i => i.urgency.level === 'OK').length,
+            expired: filtered.filter(i => i.expiry.expired > 0).length,
+            expiring_3m: filtered.filter(i => i.expiry.expiring_3m > 0).length,
+            expiring_6m: filtered.filter(i => i.expiry.expiring_6m > 0).length,
+            expiring_12m: filtered.filter(i => i.expiry.expiring_12m > 0).length,
+            no_demand_but_stock: filtered.filter(i => i.total_family_inventory > 0 && i.monthly_demand.every(d => d === 0)).length
+        };
+        return { items: filtered, all_items: items, warnings, stats };
+    }
+
+    function generateWarnings(items) {
+        const w = [];
+        const add = (level, category, list, title, desc) => {
+            if (list.length === 0) return;
+            w.push({ level, category, title, desc, codes: list.map(i => i.code) });
+        };
+        const critical = items.filter(i => i.urgency.level === 'CRITICAL');
+        add('critical', 'shortage', critical,
+            critical.length + ' NPL thiếu cực gấp (T0 hoặc trong leadtime)',
+            'Cần xử lý ngay. NPL: ' + critical.slice(0,5).map(i=>i.code).join(', ') + (critical.length>5?', ...':''));
+        const high = items.filter(i => i.urgency.level === 'HIGH');
+        add('warning', 'shortage', high,
+            high.length + ' NPL thiếu cao (T1-T2)',
+            'Đặt PO trong tuần. NPL: ' + high.slice(0,5).map(i=>i.code).join(', ') + (high.length>5?', ...':''));
+        const expired = items.filter(i => i.expiry.expired > 0);
+        add('critical', 'expiry', expired,
+            expired.length + ' NPL có tồn ĐÃ HẾT HẠN',
+            'Cần thanh lý. NPL: ' + expired.slice(0,5).map(i=>i.code).join(', ') + (expired.length>5?', ...':''));
+        const exp3 = items.filter(i => i.expiry.expiring_3m > 0);
+        add('warning', 'expiry', exp3,
+            exp3.length + ' NPL hết hạn trong 3 tháng tới',
+            'Ưu tiên dùng trước. NPL: ' + exp3.slice(0,5).map(i=>i.code).join(', ') + (exp3.length>5?', ...':''));
+        const exp6 = items.filter(i => i.expiry.expiring_6m > 0);
+        add('info', 'expiry', exp6,
+            exp6.length + ' NPL hết hạn trong 6 tháng tới',
+            'Cân nhắc kế hoạch sử dụng. NPL: ' + exp6.slice(0,5).map(i=>i.code).join(', ') + (exp6.length>5?', ...':''));
+        const noDemand = items.filter(i => i.total_family_inventory > 0 && i.monthly_demand.every(d => d === 0));
+        add('info', 'orphan', noDemand,
+            noDemand.length + ' NPL có tồn nhưng không có KHSX',
+            'Tồn kho không có nhu cầu. NPL: ' + noDemand.slice(0,5).map(i=>i.code).join(', ') + (noDemand.length>5?', ...':''));
+        const wasteRisk = items.filter(i => {
+            if (i.expiry.expiring_3m + i.expiry.expiring_6m === 0) return false;
+            const d6 = i.monthly_demand.slice(0, 6).reduce((s, v) => s + v, 0);
+            return d6 < (i.expiry.expiring_3m + i.expiry.expiring_6m);
+        });
+        add('warning', 'waste', wasteRisk,
+            wasteRisk.length + ' NPL nguy cơ hết hạn trước khi dùng hết',
+            'Tồn lô gần hết hạn > nhu cầu 6T. NPL: ' + wasteRisk.slice(0,5).map(i=>i.code).join(', ') + (wasteRisk.length>5?', ...':''));
+        return w;
+    }
+
+    return { processAll, buildFamilyMap, CONFIG };
 })();

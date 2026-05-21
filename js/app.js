@@ -1,408 +1,412 @@
 /**
- * ============================================================
- *  APP - Main controller: routing, state, render
- * ============================================================
+ * APP v3 - Main controller
  */
-
 const App = {
     state: {
-        rawData: null,
-        processedData: null,
-        period: 3,
-        page: 'dashboard',
-        filters: { search: '', status: 'all', category: 'all' },
-        theme: localStorage.getItem('theme') || 'light',
-        settings: {
-            safety: 10,
-            buffer: 7,
-            threshold: 20
-        }
+        rawData: null, processed: null, page: 'dashboard',
+        filters: { search: '', urgency: 'all', purchase_type: 'all', expiry: 'all' },
+        buyer: 'My', theme: localStorage.getItem('theme') || 'light'
     },
-
     PAGE_META: {
-        dashboard:  { title: 'Dashboard', sub: 'Tổng quan kế hoạch mua nguyên phụ liệu' },
-        upload:     { title: 'Upload dữ liệu', sub: 'Nhập dữ liệu NPL, kế hoạch sản xuất và BOM từ file' },
-        npl:        { title: 'Danh sách NPL', sub: 'Toàn bộ nguyên phụ liệu đang theo dõi' },
-        production: { title: 'Kế hoạch sản xuất', sub: 'Sản phẩm và sản lượng dự kiến' },
-        warnings:   { title: 'Cảnh báo', sub: 'Các NPL cần xử lý ngay' },
-        settings:   { title: 'Cài đặt', sub: 'Cấu hình tham số tính toán' }
+        dashboard: { title: 'Dashboard', sub: 'Tổng quan kế hoạch mua NPL — Phụ trách: My' },
+        upload:    { title: 'Upload dữ liệu', sub: 'Tải file Data MH, Tồn kho, Nhu cầu, Đơn đang về' },
+        purchase:  { title: 'Kế hoạch mua', sub: 'Chi tiết NPL cần mua phân theo mức khẩn cấp' },
+        expiry:    { title: 'Quản lý hạn dùng', sub: 'NPL có lô gần hết hạn cần ưu tiên dùng' },
+        warnings:  { title: 'Cảnh báo', sub: 'Tổng hợp các vấn đề cần xử lý' },
+        settings:  { title: 'Cài đặt', sub: 'Cấu hình bộ lọc và mức khẩn' }
     },
 
-    async init() {
+    init() {
         this.applyTheme();
         this.bindEvents();
-        await this.loadInitialData();
+        this.tryLoadStoredData();
     },
 
-    async loadInitialData() {
+    tryLoadStoredData() {
         try {
-            const res = await fetch('data/sample-data.json');
-            this.state.rawData = await res.json();
-            this.recalculate();
-        } catch (err) {
-            console.warn('Không tải được sample data:', err);
-            this.state.rawData = { npl_list: [], production_plan: [], bom: [] };
-            this.recalculate();
-        }
+            const stored = localStorage.getItem('npl_raw_data');
+            if (stored) {
+                this.state.rawData = JSON.parse(stored);
+                this.recalculate();
+                document.getElementById('data-status').textContent = 'Dữ liệu: đã load từ session trước';
+            }
+        } catch (e) {}
     },
 
     recalculate() {
         if (!this.state.rawData) return;
-        this.state.processedData = NPLCalculator.processAll(this.state.rawData, this.state.period);
+        this.state.processed = NPLCalculator.processAll(this.state.rawData, { buyerFilter: this.state.buyer });
         this.render();
     },
 
     render() {
+        if (!this.state.processed) return;
         this.renderKPIs();
         this.renderHero();
-        this.renderTable();
-        this.renderNPLList();
-        this.renderProductionList();
+        this.renderDashboard();
+        this.renderPurchase();
+        this.renderExpiry();
         this.renderWarnings();
-    },
-
-    renderHero() {
-        const items = this.state.processedData.items;
-        const alertCount = items.filter(i => i.statusInfo.status === 'danger').length;
-        document.getElementById('hero-period').textContent = `${this.state.period} tháng`;
-        document.getElementById('hero-alert').textContent = alertCount;
+        this.populateFilters();
     },
 
     renderKPIs() {
-        const items = this.state.processedData.items;
-        const urgent = items.filter(i => i.statusInfo.status === 'warning').length;
-        const shortage = items.filter(i => i.statusInfo.status === 'danger').length;
-        const total = items.reduce((s, i) => s + i.total_cost, 0);
-
-        document.getElementById('kpi-total').textContent = items.length;
-        document.getElementById('kpi-urgent').textContent = urgent;
-        document.getElementById('kpi-shortage').textContent = shortage;
-        document.getElementById('kpi-value').textContent = this.fmtCurrency(total);
-        document.getElementById('kpi-period-label').textContent = `Giai đoạn ${this.state.period} tháng`;
-        document.getElementById('nav-warning-count').textContent = shortage + urgent;
+        const s = this.state.processed.stats;
+        document.getElementById('kpi-critical').textContent = s.critical;
+        document.getElementById('kpi-high').textContent = s.high;
+        document.getElementById('kpi-medium').textContent = s.medium;
+        document.getElementById('kpi-low').textContent = s.low;
+        document.getElementById('kpi-total').textContent = s.total_npl;
+        document.getElementById('kpi-expired').textContent = s.expired;
+        document.getElementById('kpi-exp3').textContent = s.expiring_3m;
+        document.getElementById('kpi-exp12').textContent = s.expiring_6m + s.expiring_12m;
+        document.getElementById('nav-purchase-count').textContent = s.critical + s.high;
+        document.getElementById('nav-expiry-count').textContent = s.expired + s.expiring_3m;
+        document.getElementById('nav-warning-count').textContent = this.state.processed.warnings.length;
     },
 
-    renderTable() {
-        const items = this.filterItems(this.state.processedData.items);
-        const tbody = document.getElementById('table-body');
+    renderHero() {
+        const s = this.state.processed.stats;
+        document.getElementById('hero-desc').innerHTML =
+            'Đã tính xong kế hoạch cho <strong>' + s.total_npl + '</strong> NPL của bạn. ' +
+            '<strong>' + s.critical + '</strong> cực gấp · <strong>' + s.high + '</strong> mức cao · <strong>' + s.expired + '</strong> đã hết hạn.';
+    },
 
+    renderDashboard() {
+        const items = this.state.processed.items.slice()
+            .sort((a, b) => b.urgency.score - a.urgency.score || b.purchase_9m - a.purchase_9m)
+            .slice(0, 10);
+        const tbody = document.getElementById('dashboard-table');
         if (items.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="10" class="empty-state">Không có NPL phù hợp.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="empty-state">Không có NPL cần mua</td></tr>';
             return;
         }
-
-        tbody.innerHTML = items.map(item => `
-            <tr>
-                <td><span class="npl-code">${item.npl_code}</span></td>
-                <td>${item.npl_name}</td>
-                <td>${this.categoryLabel(item.category)}</td>
-                <td class="text-right">${this.fmtNum(item.inventory)}</td>
-                <td class="text-right">${this.fmtNum(item.demand)}</td>
-                <td class="text-right"><strong>${this.fmtNum(item.purchase)}</strong></td>
-                <td class="text-center">${item.leadtime} ngày</td>
-                <td class="text-center">${item.orderDate ? this.fmtDate(item.orderDate) : '—'}</td>
-                <td><span class="status-pill ${item.statusInfo.status}">${item.statusInfo.label}</span></td>
-                <td>${this.renderSubs(item)}</td>
-            </tr>
-        `).join('');
+        const self = this;
+        tbody.innerHTML = items.map(i =>
+            '<tr onclick="App.showDetail(\'' + i.code + '\')" style="cursor:pointer">' +
+            '<td><span class="npl-code">' + i.code + '</span></td>' +
+            '<td>' + self.escape(i.name || '—') + '</td>' +
+            '<td>' + (i.classification || '—') + '</td>' +
+            '<td class="text-right">' + self.fmt(i.total_family_inventory) + '</td>' +
+            '<td class="text-right">' + self.fmt(i.shortage_9m) + '</td>' +
+            '<td class="text-right"><strong>' + self.fmt(i.purchase_t0) + '</strong></td>' +
+            '<td class="text-right">' + self.fmt(i.purchase_3m) + '</td>' +
+            '<td class="text-right">' + self.fmt(i.purchase_6m) + '</td>' +
+            '<td class="text-right">' + self.fmt(i.purchase_9m) + '</td>' +
+            '<td>' + self.urgencyPill(i.urgency) + '</td>' +
+            '</tr>'
+        ).join('');
     },
 
-    renderSubs(item) {
-        if (item.suggestedSubstitute) {
-            return `<span class="substitute-tag" title="Đề xuất dùng thay thế">${item.suggestedSubstitute.code} ★</span>`;
-        }
-        if (item.substitutes && item.substitutes.length) {
-            return item.substitutes.map(s => `<span class="substitute-tag">${s}</span>`).join('');
-        }
-        return '<span style="color:var(--text-faint)">—</span>';
-    },
-
-    renderNPLList() {
-        const tbody = document.getElementById('npl-list-body');
-        if (!tbody) return;
-        const list = this.state.rawData.npl_list || [];
-        if (list.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Chưa có dữ liệu NPL.</td></tr>';
+    renderPurchase() {
+        const items = this.filterItems(this.state.processed.items)
+            .sort((a, b) => b.urgency.score - a.urgency.score || b.purchase_9m - a.purchase_9m);
+        const tbody = document.getElementById('purchase-table');
+        if (items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="15" class="empty-state">Không có NPL phù hợp bộ lọc</td></tr>';
             return;
         }
-        tbody.innerHTML = list.map(n => `
-            <tr>
-                <td><span class="npl-code">${n.code}</span></td>
-                <td>${n.name}</td>
-                <td>${this.categoryLabel(n.category)}</td>
-                <td class="text-right">${this.fmtNum(n.inventory)}</td>
-                <td class="text-right">${this.fmtNum(n.on_order || 0)}</td>
-                <td class="text-center">${n.leadtime} ngày</td>
-                <td class="text-right">${this.fmtNum(n.unit_price || 0)}đ</td>
-                <td>${(n.substitutes || []).map(s => `<span class="substitute-tag">${s}</span>`).join('') || '—'}</td>
-            </tr>
-        `).join('');
+        const self = this;
+        tbody.innerHTML = items.map(i => {
+            const famLabel = i.total_family_inventory > i.self_inventory ?
+                ' <small style="color:var(--text-faint)">(riêng ' + self.fmt(i.self_inventory) + ')</small>' : '';
+            return '<tr onclick="App.showDetail(\'' + i.code + '\')" style="cursor:pointer">' +
+                '<td><span class="npl-code">' + i.code + '</span></td>' +
+                '<td>' + self.escape(i.name || '—') + '</td>' +
+                '<td>' + (i.unit || '—') + '</td>' +
+                '<td class="text-right">' + self.fmt(i.total_family_inventory) + famLabel + '</td>' +
+                '<td class="text-right">' + self.fmt(i.incoming_total) + '</td>' +
+                '<td class="text-right">' + self.fmt(i.monthly_demand[0]) + '</td>' +
+                '<td class="text-right"><strong style="color:' + (i.purchase_t0 > 0 ? 'var(--danger)' : 'inherit') + '">' + self.fmt(i.purchase_t0) + '</strong></td>' +
+                '<td class="text-right">' + self.fmt(i.purchase_3m) + '</td>' +
+                '<td class="text-right">' + self.fmt(i.purchase_6m) + '</td>' +
+                '<td class="text-right">' + self.fmt(i.purchase_9m) + '</td>' +
+                '<td class="text-center">' + (i.leadtime_months || '—') + '</td>' +
+                '<td class="text-center">' + (i.shelflife_years || '—') + '</td>' +
+                '<td>' + (i.purchase_type || '—') + '</td>' +
+                '<td>' + (i.substitute_group ? '<span class="substitute-tag">' + i.substitute_group + '</span>' : '—') + '</td>' +
+                '<td>' + self.urgencyPill(i.urgency) + '</td>' +
+                '</tr>';
+        }).join('');
     },
 
-    renderProductionList() {
-        const tbody = document.getElementById('production-body');
-        if (!tbody) return;
-        const list = this.state.rawData.production_plan || [];
-        if (list.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Chưa có kế hoạch sản xuất.</td></tr>';
+    renderExpiry() {
+        const f = this.state.filters.expiry;
+        let items = this.state.processed.items.filter(i =>
+            i.expiry.expired + i.expiry.expiring_3m + i.expiry.expiring_6m + i.expiry.expiring_12m > 0);
+        if (f === 'expired') items = items.filter(i => i.expiry.expired > 0);
+        else if (f === '3m') items = items.filter(i => i.expiry.expiring_3m > 0);
+        else if (f === '6m') items = items.filter(i => i.expiry.expiring_6m > 0);
+        else if (f === '12m') items = items.filter(i => i.expiry.expiring_12m > 0);
+        items.sort((a, b) => b.expiry.expired - a.expiry.expired || b.expiry.expiring_3m - a.expiry.expiring_3m);
+        const tbody = document.getElementById('expiry-table');
+        if (items.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" class="empty-state">Không có NPL phù hợp</td></tr>';
             return;
         }
-        tbody.innerHTML = list.map(p => `
-            <tr>
-                <td><span class="npl-code">${p.product_id}</span></td>
-                <td>${p.product_name}</td>
-                <td class="text-right">${this.fmtNum(p.quantity)}</td>
-                <td class="text-center">${this.fmtDate(p.start_date)}</td>
-            </tr>
-        `).join('');
+        const self = this;
+        tbody.innerHTML = items.map(i => {
+            const demand6m = i.monthly_demand.slice(0, 6).reduce((s, v) => s + v, 0);
+            const expSoon = i.expiry.expiring_3m + i.expiry.expiring_6m;
+            const risk = expSoon > demand6m ? '⚠️ Hết hạn trước khi dùng hết' : '✓ Ổn';
+            const riskColor = expSoon > demand6m ? 'var(--danger)' : 'var(--success)';
+            return '<tr onclick="App.showDetail(\'' + i.code + '\')" style="cursor:pointer">' +
+                '<td><span class="npl-code">' + i.code + '</span></td>' +
+                '<td>' + self.escape(i.name || '—') + '</td>' +
+                '<td class="text-right" style="color:' + (i.expiry.expired > 0 ? 'var(--danger)' : 'inherit') + '">' + self.fmt(i.expiry.expired) + '</td>' +
+                '<td class="text-right" style="color:' + (i.expiry.expiring_3m > 0 ? 'var(--warning)' : 'inherit') + '">' + self.fmt(i.expiry.expiring_3m) + '</td>' +
+                '<td class="text-right">' + self.fmt(i.expiry.expiring_6m) + '</td>' +
+                '<td class="text-right">' + self.fmt(i.expiry.expiring_12m) + '</td>' +
+                '<td class="text-right">' + self.fmt(i.self_inventory) + '</td>' +
+                '<td class="text-right">' + self.fmt(demand6m) + '</td>' +
+                '<td><span style="color:' + riskColor + '">' + risk + '</span></td>' +
+                '</tr>';
+        }).join('');
     },
 
     renderWarnings() {
-        const container = document.getElementById('warnings-list');
-        if (!container) return;
-        const warnings = this.state.processedData.warnings;
-
-        if (warnings.length === 0) {
-            container.innerHTML = `<div class="warning-card info">
-                <div class="warning-icon">✓</div>
-                <div class="warning-content">
-                    <div class="warning-title">Mọi thứ đều ổn</div>
-                    <div class="warning-desc">Không có cảnh báo nào cho giai đoạn ${this.state.period} tháng.</div>
-                </div>
-            </div>`;
+        const list = this.state.processed.warnings;
+        const c = document.getElementById('warnings-list');
+        if (list.length === 0) {
+            c.innerHTML = '<div class="warning-card info"><div class="warning-icon">✓</div><div class="warning-content"><div class="warning-title">Mọi thứ đều ổn</div><div class="warning-desc">Không có cảnh báo nào.</div></div></div>';
             return;
         }
-
-        const icons = { critical: '⚠️', warning: '⏰', info: 'ℹ️' };
-        container.innerHTML = warnings.map(w => `
-            <div class="warning-card ${w.level}">
-                <div class="warning-icon">${icons[w.level] || 'ℹ️'}</div>
-                <div class="warning-content">
-                    <div class="warning-title">${w.title}</div>
-                    <div class="warning-desc">${w.desc}</div>
-                </div>
-            </div>
-        `).join('');
+        const icons = { critical: '🔴', warning: '⚠️', info: 'ℹ️' };
+        c.innerHTML = list.map(w =>
+            '<div class="warning-card ' + w.level + '">' +
+            '<div class="warning-icon">' + (icons[w.level] || 'ℹ️') + '</div>' +
+            '<div class="warning-content"><div class="warning-title">' + w.title + '</div>' +
+            '<div class="warning-desc">' + w.desc + '</div></div></div>'
+        ).join('');
     },
+
+    populateFilters() {
+        const types = Array.from(new Set(this.state.processed.items.map(i => i.purchase_type).filter(Boolean)));
+        const sel = document.getElementById('filter-purchase-type');
+        const current = sel.value;
+        sel.innerHTML = '<option value="all">Tất cả hình thức mua</option>' +
+            types.map(t => '<option value="' + t + '">' + t + '</option>').join('');
+        sel.value = current;
+    },
+
+    showDetail(code) {
+        const item = this.state.processed.items.find(i => i.code === code) ||
+                     this.state.processed.all_items.find(i => i.code === code);
+        if (!item) return;
+        document.getElementById('modal-title').textContent = item.code + ' — ' + (item.name || '—');
+        const body = document.getElementById('modal-body');
+        const self = this;
+        let html = '';
+        html += '<div class="detail-section"><h4>Thông tin cơ bản</h4><div class="detail-grid">';
+        html += '<div><span class="detail-label">Phụ trách</span><span class="detail-value">' + (item.buyer || '—') + '</span></div>';
+        html += '<div><span class="detail-label">Xuất xứ</span><span class="detail-value">' + (item.origin || '—') + '</span></div>';
+        html += '<div><span class="detail-label">Hình thức mua</span><span class="detail-value">' + (item.purchase_type || '—') + '</span></div>';
+        html += '<div><span class="detail-label">Đơn vị</span><span class="detail-value">' + (item.unit || '—') + '</span></div>';
+        html += '<div><span class="detail-label">Thời gian về (tháng)</span><span class="detail-value">' + (item.leadtime_months || '—') + '</span></div>';
+        html += '<div><span class="detail-label">Hạn dùng (năm)</span><span class="detail-value">' + (item.shelflife_years || '—') + '</span></div>';
+        html += '<div><span class="detail-label">Nhóm thay thế</span><span class="detail-value">' + (item.substitute_group || '—') + '</span></div>';
+        html += '<div><span class="detail-label">Mức khẩn cấp</span><span class="detail-value">' + this.urgencyPill(item.urgency) + '</span></div>';
+        html += '</div></div>';
+
+        html += '<div class="detail-section"><h4>Family Inventory (' + item.family_codes.length + ' mã)</h4>';
+        html += '<table class="data-table" style="margin-top:8px"><thead><tr><th>Mã</th><th>Tên</th><th class="text-right">Tồn</th><th>Theo kho</th></tr></thead><tbody>';
+        item.family_breakdown.forEach(b => {
+            const whBreakdown = Object.entries(b.by_warehouse).map(([w, v]) => w + ': ' + self.fmt(v)).join(' · ') || '—';
+            html += '<tr ' + (b.is_self ? 'style="background:var(--primary-light)"' : '') + '>' +
+                    '<td><span class="npl-code">' + b.code + '</span>' + (b.is_self ? ' <small>(chính)</small>' : '') + '</td>' +
+                    '<td>' + self.escape(b.name || '—') + '</td>' +
+                    '<td class="text-right"><strong>' + self.fmt(b.inventory) + '</strong></td>' +
+                    '<td><small>' + whBreakdown + '</small></td></tr>';
+        });
+        html += '</tbody></table>';
+        html += '<p style="margin-top:8px;font-size:13px"><strong>Tổng family: ' + self.fmt(item.total_family_inventory) + ' ' + (item.unit || '') + '</strong></p></div>';
+
+        html += '<div class="detail-section"><h4>Nhu cầu & cân đối theo tháng</h4>';
+        html += '<table class="data-table" style="margin-top:8px"><thead><tr><th>Tháng</th>';
+        for (let m = 0; m < 12; m++) html += '<th class="text-right">T' + m + '</th>';
+        html += '</tr></thead><tbody>';
+        html += '<tr><td>Nhu cầu</td>' + item.monthly_demand.map(d => '<td class="text-right">' + self.fmt(d) + '</td>').join('') + '</tr>';
+        html += '<tr><td>Cân đối</td>' + item.balance_by_month.map(b => '<td class="text-right" style="color:' + (b < 0 ? 'var(--danger)' : 'var(--success)') + '">' + self.fmt(b) + '</td>').join('') + '</tr>';
+        html += '<tr><td>Thiếu</td>' + item.shortage_by_month.map(s => '<td class="text-right" style="color:' + (s > 0 ? 'var(--danger)' : 'inherit') + '">' + (s > 0 ? self.fmt(s) : '—') + '</td>').join('') + '</tr>';
+        html += '</tbody></table></div>';
+
+        if (item.incoming_pos && item.incoming_pos.length > 0) {
+            html += '<div class="detail-section"><h4>Đơn đang về (' + item.incoming_pos.length + ' PO · tổng ' + self.fmt(item.incoming_total) + ')</h4>';
+            html += '<table class="data-table" style="margin-top:8px"><thead><tr><th>Số PO</th><th>NCC</th><th>Ngày giao</th><th class="text-right">Kế hoạch</th><th class="text-right">Đã nhận</th><th class="text-right">Còn lại</th><th>Trạng thái</th></tr></thead><tbody>';
+            item.incoming_pos.forEach(po => {
+                html += '<tr><td>' + po.po_number + '</td><td>' + self.escape(po.supplier || '—') + '</td><td>' + (po.delivery_date || '—') + '</td>' +
+                        '<td class="text-right">' + self.fmt(po.planned) + '</td><td class="text-right">' + self.fmt(po.done) + '</td>' +
+                        '<td class="text-right"><strong>' + self.fmt(po.on_order) + '</strong></td><td>' + (po.status || '—') + '</td></tr>';
+            });
+            html += '</tbody></table></div>';
+        }
+
+        if (item.expiry && item.expiry.lots && item.expiry.lots.length > 0) {
+            html += '<div class="detail-section"><h4>Lô sắp/đã hết hạn</h4>';
+            html += '<table class="data-table" style="margin-top:8px"><thead><tr><th>Mã lô</th><th>Kho</th><th class="text-right">Tồn</th><th>Hạn dùng</th><th>Còn (tháng)</th></tr></thead><tbody>';
+            item.expiry.lots.forEach(l => {
+                const color = l.months_left < 0 ? 'var(--danger)' : l.months_left <= 3 ? 'var(--warning)' : 'inherit';
+                const lbl = l.months_left < 0 ? 'Đã hết hạn' : l.months_left + ' tháng';
+                html += '<tr><td>' + l.lot + '</td><td>' + l.warehouse + '</td><td class="text-right">' + self.fmt(l.stock) + '</td><td>' + l.expiry + '</td><td style="color:' + color + '">' + lbl + '</td></tr>';
+            });
+            html += '</tbody></table></div>';
+        }
+
+        body.innerHTML = html;
+        document.getElementById('modal-backdrop').hidden = false;
+    },
+
+    closeDetail() { document.getElementById('modal-backdrop').hidden = true; },
 
     filterItems(items) {
         const f = this.state.filters;
-        return items.filter(item => {
+        return items.filter(i => {
             if (f.search) {
                 const q = f.search.toLowerCase();
-                if (!item.npl_code.toLowerCase().includes(q) && !item.npl_name.toLowerCase().includes(q)) return false;
+                if (i.code.toLowerCase().indexOf(q) === -1 && (i.name || '').toLowerCase().indexOf(q) === -1) return false;
             }
-            if (f.status !== 'all' && item.statusInfo.status !== f.status) return false;
-            if (f.category !== 'all' && item.category !== f.category) return false;
+            if (f.urgency !== 'all' && i.urgency.level !== f.urgency) return false;
+            if (f.purchase_type !== 'all' && i.purchase_type !== f.purchase_type) return false;
             return true;
         });
     },
 
-    // ============ Navigation ============
     goToPage(page) {
         this.state.page = page;
-        document.querySelectorAll('.page').forEach(p => p.hidden = p.dataset.page !== page);
+        document.querySelectorAll('.page').forEach(p => { p.hidden = p.dataset.page !== page; });
         document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === page));
         const meta = this.PAGE_META[page];
         if (meta) {
             document.getElementById('page-title').textContent = meta.title;
             document.getElementById('page-subtitle').textContent = meta.sub;
         }
-        // Close mobile sidebar
         document.getElementById('sidebar').classList.remove('open');
     },
 
-    // ============ Theme ============
     applyTheme() {
         document.documentElement.setAttribute('data-theme', this.state.theme);
         const label = document.querySelector('.theme-label');
         if (label) label.textContent = this.state.theme === 'light' ? 'Chuyển nền tối' : 'Chuyển nền sáng';
     },
-
     toggleTheme() {
         this.state.theme = this.state.theme === 'light' ? 'dark' : 'light';
         localStorage.setItem('theme', this.state.theme);
         this.applyTheme();
     },
 
-    // ============ Upload ============
     async handleFiles(files) {
         if (!files || files.length === 0) return;
         const resultEl = document.getElementById('upload-result');
         resultEl.hidden = false;
         resultEl.classList.remove('error');
         resultEl.innerHTML = '<strong>Đang xử lý...</strong> Đọc và phân tích file.';
-
         try {
-            const { data, fileInfo } = await NPLUploader.parseFiles(Array.from(files));
-
-            // Validate
-            const hasData = (data.npl_list && data.npl_list.length) ||
-                           (data.production_plan && data.production_plan.length) ||
-                           (data.bom && data.bom.length);
-
-            if (!hasData) {
-                throw new Error('Không tìm thấy dữ liệu hợp lệ. Kiểm tra lại format file hoặc tải template mẫu.');
+            const out = await NPLUploader.parseFiles(Array.from(files));
+            if (this.state.rawData) {
+                ['npl_master', 'inventory_lots', 'demand_total', 'incoming_orders'].forEach(k => {
+                    if (out.data[k] && out.data[k].length) this.state.rawData[k] = out.data[k];
+                });
+                if (out.data.substitute_groups && Object.keys(out.data.substitute_groups).length) {
+                    this.state.rawData.substitute_groups = out.data.substitute_groups;
+                }
+            } else {
+                this.state.rawData = out.data;
             }
-
-            // Merge với data hiện có (giữ phần không bị overwrite)
-            const newData = {
-                npl_list: data.npl_list && data.npl_list.length ? data.npl_list : (this.state.rawData?.npl_list || []),
-                production_plan: data.production_plan && data.production_plan.length ? data.production_plan : (this.state.rawData?.production_plan || []),
-                bom: data.bom && data.bom.length ? data.bom : (this.state.rawData?.bom || [])
-            };
-
-            this.state.rawData = newData;
             this.recalculate();
-
-            const summary = fileInfo.map(f =>
-                f.ok ? `✓ ${f.name}: ${f.counts.join(', ')}` : `✗ ${f.name}: ${f.error}`
-            ).join('<br>');
-
-            resultEl.innerHTML = `<strong>Upload thành công!</strong><br>${summary}<br><br>Dashboard đã cập nhật dữ liệu mới. Sang tab <a href="#" data-jump="dashboard" style="color:inherit;text-decoration:underline;">Dashboard</a> để xem.`;
-
+            try { localStorage.setItem('npl_raw_data', JSON.stringify(this.state.rawData)); } catch (e) {}
+            const summary = out.fileInfo.map(f => {
+                if (f.ok) {
+                    const counts = [];
+                    if (f.parsed && f.parsed.count) counts.push(f.parsed.count + ' dòng');
+                    if (f.parsed && f.parsed.groups) counts.push(f.parsed.groups + ' nhóm');
+                    return '<div class="file-row ok">✓ <strong>' + f.name + '</strong> — ' + f.type + ' (' + counts.join(', ') + ')</div>';
+                }
+                return '<div class="file-row error">✗ <strong>' + f.name + '</strong> — ' + f.error + '</div>';
+            }).join('');
+            resultEl.innerHTML = '<strong>Upload thành công!</strong>' + summary + '<br><a href="#" data-jump="dashboard" style="color:inherit;text-decoration:underline">Sang Dashboard →</a>';
+            document.getElementById('data-status').textContent = 'Dữ liệu: đã load ' + this.state.rawData.npl_master.length + ' NPL';
+            this.renderDataSummary();
         } catch (err) {
             resultEl.classList.add('error');
-            resultEl.innerHTML = `<strong>Lỗi:</strong> ${err.message}`;
+            resultEl.innerHTML = '<strong>Lỗi:</strong> ' + err.message;
         }
     },
 
-    // ============ Settings ============
-    saveSettings() {
-        this.state.settings.safety = parseFloat(document.getElementById('setting-safety').value);
-        this.state.settings.buffer = parseFloat(document.getElementById('setting-buffer').value);
-        this.state.settings.threshold = parseFloat(document.getElementById('setting-threshold').value);
-
-        // Apply to calculator
-        NPLCalculator.CONSTANTS.SAFETY_STOCK_RATIO = this.state.settings.safety / 100;
-        NPLCalculator.CONSTANTS.BUFFER_DAYS = this.state.settings.buffer;
-        NPLCalculator.CONSTANTS.MIN_INVENTORY_THRESHOLD = this.state.settings.threshold / 100;
-
-        this.recalculate();
-        alert('Đã lưu cài đặt và tính toán lại.');
+    renderDataSummary() {
+        const d = this.state.rawData;
+        document.getElementById('data-summary').hidden = false;
+        document.getElementById('summary-grid').innerHTML =
+            '<div class="summary-card"><div class="summary-num">' + (d.npl_master || []).length + '</div><div class="summary-label">NPL master</div></div>' +
+            '<div class="summary-card"><div class="summary-num">' + Object.keys(d.substitute_groups || {}).length + '</div><div class="summary-label">Nhóm thay thế</div></div>' +
+            '<div class="summary-card"><div class="summary-num">' + (d.inventory_lots || []).length + '</div><div class="summary-label">Lô tồn kho</div></div>' +
+            '<div class="summary-card"><div class="summary-num">' + (d.demand_total || []).length + '</div><div class="summary-label">NPL có nhu cầu</div></div>' +
+            '<div class="summary-card"><div class="summary-num">' + (d.incoming_orders || []).length + '</div><div class="summary-label">PO đang về</div></div>';
     },
 
-    // ============ Export ============
     exportCSV() {
-        const items = this.filterItems(this.state.processedData.items);
-        const headers = ['Mã NPL', 'Tên NPL', 'Nhóm', 'Tồn kho', 'Nhu cầu', 'Cần mua', 'Leadtime', 'Ngày đặt', 'Trạng thái', 'Giá trị'];
+        const items = this.filterItems(this.state.processed.items);
+        const headers = ['Mã', 'Tên', 'ĐVT', 'Phụ trách', 'Tồn family', 'Tồn riêng', 'Đang về', 'Cần T0', 'Mua T0', 'Mua 3T', 'Mua 6T', 'Mua 9T', 'Thời gian về', 'Hạn dùng', 'Hình thức', 'Nhóm thay thế', 'Mức khẩn'];
         const rows = items.map(i => [
-            i.npl_code, i.npl_name, this.categoryLabel(i.category),
-            i.inventory, i.demand, i.purchase, i.leadtime,
-            i.orderDate ? this.fmtDate(i.orderDate) : '',
-            i.statusInfo.label, i.total_cost
+            i.code, i.name, i.unit, i.buyer, i.total_family_inventory, i.self_inventory, i.incoming_total,
+            i.monthly_demand[0], i.purchase_t0, i.purchase_3m, i.purchase_6m, i.purchase_9m,
+            i.leadtime_months, i.shelflife_years, i.purchase_type, i.substitute_group, i.urgency.label
         ]);
-        const csv = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+        const csv = [headers].concat(rows).map(r => r.map(c => '"' + String(c || '').replace(/"/g, '""') + '"').join(',')).join('\n');
         const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `npl-plan-${this.state.period}thang-${Date.now()}.csv`;
+        link.download = 'npl-purchase-plan-' + Date.now() + '.csv';
         link.click();
     },
 
-    // ============ Helpers ============
-    fmtNum(n) { return new Intl.NumberFormat('vi-VN').format(Math.round(n || 0)); },
-    fmtCurrency(n) {
-        if (n >= 1e9) return (n/1e9).toFixed(2) + ' tỷ';
-        if (n >= 1e6) return (n/1e6).toFixed(1) + ' tr';
-        return this.fmtNum(n) + 'đ';
-    },
-    fmtDate(d) {
-        if (!d) return '—';
-        const date = new Date(d);
-        if (isNaN(date)) return '—';
-        return date.toLocaleDateString('vi-VN', { day:'2-digit', month:'2-digit', year:'numeric' });
-    },
-    categoryLabel(c) {
-        return { vai: 'Vải', chi: 'Chỉ', nut: 'Nút - Khóa', phukien: 'Phụ kiện' }[c] || c || '—';
+    saveSettings() {
+        this.state.buyer = document.getElementById('setting-buyer').value.trim() || null;
+        NPLCalculator.CONFIG.URGENCY_HIGH_MONTHS = parseInt(document.getElementById('setting-high').value);
+        NPLCalculator.CONFIG.URGENCY_MED_MONTHS = parseInt(document.getElementById('setting-medium').value);
+        this.recalculate();
+        alert('Đã lưu và tính lại.');
     },
 
-    // ============ Event binding ============
+    fmt(n) {
+        if (n === null || n === undefined || isNaN(n)) return '0';
+        return new Intl.NumberFormat('vi-VN').format(Math.round(n));
+    },
+    escape(s) {
+        return String(s || '').replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
+    },
+    urgencyPill(u) {
+        const colors = { CRITICAL: 'danger', HIGH: 'warning', MEDIUM: 'medium', LOW: 'success', OK: 'ok' };
+        const icons = { CRITICAL: '🔴', HIGH: '🟠', MEDIUM: '🟡', LOW: '🟢', OK: '✓' };
+        return '<span class="status-pill ' + colors[u.level] + '">' + icons[u.level] + ' ' + u.label + '</span>';
+    },
+
     bindEvents() {
-        // Sidebar navigation
-        document.querySelectorAll('.nav-item').forEach(item => {
-            item.addEventListener('click', e => {
-                e.preventDefault();
-                this.goToPage(item.dataset.page);
-            });
-        });
-
-        // Jump buttons (in hero, upload result, etc.)
+        const self = this;
+        document.querySelectorAll('.nav-item').forEach(el =>
+            el.addEventListener('click', e => { e.preventDefault(); self.goToPage(el.dataset.page); }));
         document.addEventListener('click', e => {
-            const jumpEl = e.target.closest('[data-jump]');
-            if (jumpEl) {
-                e.preventDefault();
-                this.goToPage(jumpEl.dataset.jump);
-            }
+            const j = e.target.closest('[data-jump]');
+            if (j) { e.preventDefault(); self.goToPage(j.dataset.jump); }
         });
-
-        // Period switch
-        document.querySelectorAll('.period-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                this.state.period = parseInt(btn.dataset.period);
-                this.recalculate();
-            });
-        });
-
-        // Theme
-        document.getElementById('theme-toggle').addEventListener('click', () => this.toggleTheme());
-
-        // Mobile menu
-        document.getElementById('mobile-menu').addEventListener('click', () => {
-            document.getElementById('sidebar').classList.toggle('open');
-        });
-
-        // Search/filter
-        document.getElementById('search').addEventListener('input', e => {
-            this.state.filters.search = e.target.value;
-            this.renderTable();
-        });
-        document.getElementById('filter-status').addEventListener('change', e => {
-            this.state.filters.status = e.target.value;
-            this.renderTable();
-        });
-        document.getElementById('filter-category').addEventListener('change', e => {
-            this.state.filters.category = e.target.value;
-            this.renderTable();
-        });
-
-        // Export
-        document.getElementById('btn-export').addEventListener('click', () => this.exportCSV());
-
-        // Upload zone
+        document.getElementById('theme-toggle').addEventListener('click', () => self.toggleTheme());
+        document.getElementById('mobile-menu').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('open'));
+        document.getElementById('search').addEventListener('input', e => { self.state.filters.search = e.target.value; self.renderPurchase(); });
+        document.getElementById('filter-urgency').addEventListener('change', e => { self.state.filters.urgency = e.target.value; self.renderPurchase(); });
+        document.getElementById('filter-purchase-type').addEventListener('change', e => { self.state.filters.purchase_type = e.target.value; self.renderPurchase(); });
+        document.getElementById('filter-expiry').addEventListener('change', e => { self.state.filters.expiry = e.target.value; self.renderExpiry(); });
+        document.getElementById('btn-export').addEventListener('click', () => self.exportCSV());
         const zone = document.getElementById('upload-zone');
         const input = document.getElementById('file-input');
-
         zone.addEventListener('click', () => input.click());
-        document.getElementById('upload-browse').addEventListener('click', e => {
-            e.preventDefault(); e.stopPropagation();
-            input.click();
-        });
-        input.addEventListener('change', e => this.handleFiles(e.target.files));
-
-        ['dragenter', 'dragover'].forEach(ev => {
-            zone.addEventListener(ev, e => {
-                e.preventDefault();
-                zone.classList.add('dragover');
-            });
-        });
-        ['dragleave', 'drop'].forEach(ev => {
-            zone.addEventListener(ev, e => {
-                e.preventDefault();
-                zone.classList.remove('dragover');
-            });
-        });
-        zone.addEventListener('drop', e => {
-            e.preventDefault();
-            this.handleFiles(e.dataTransfer.files);
-        });
-
-        // Settings
-        document.getElementById('btn-save-settings').addEventListener('click', () => this.saveSettings());
+        document.getElementById('upload-browse').addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); input.click(); });
+        input.addEventListener('change', e => self.handleFiles(e.target.files));
+        ['dragenter', 'dragover'].forEach(ev => zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.add('dragover'); }));
+        ['dragleave', 'drop'].forEach(ev => zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.remove('dragover'); }));
+        zone.addEventListener('drop', e => { e.preventDefault(); self.handleFiles(e.dataTransfer.files); });
+        document.getElementById('btn-save-settings').addEventListener('click', () => self.saveSettings());
+        document.getElementById('modal-close').addEventListener('click', () => self.closeDetail());
+        document.getElementById('modal-backdrop').addEventListener('click', e => { if (e.target.id === 'modal-backdrop') self.closeDetail(); });
     }
 };
 
-// Boot
 document.addEventListener('DOMContentLoaded', () => App.init());

@@ -1,286 +1,282 @@
 /**
- * ============================================================
- *  UPLOADER - Parse Excel/XML/CSV thành cấu trúc dữ liệu chuẩn
- * ============================================================
- *
- *  Hỗ trợ:
- *    - File Excel (.xlsx, .xls) - dùng SheetJS (CDN)
- *    - File XML (.xml) - dùng DOMParser
- *    - File CSV (.csv) - parse thủ công
- *
- *  Auto-detect:
- *    - File gộp 3 sheet: NPL_List, Production_Plan, BOM
- *    - File tách: phát hiện loại theo column header
- *
- *  Output chuẩn: { npl_list, production_plan, bom }
- * ============================================================
+ * UPLOADER v3 - Parser cho 6 file thực tế
  */
-
 const NPLUploader = (function() {
+    const ALLOWED_WAREHOUSES = ['152.0101','152.0102','152.0103','152.0201','152.0401','152.0501','152.0601','152.0701'];
+    const ORDER_TOLERANCE = 0.05;
+    const SS_NS = 'urn:schemas-microsoft-com:office:spreadsheet';
 
-    // Mapping column header → field name
-    const FIELD_ALIASES = {
-        // NPL List
-        'code': 'code', 'mã': 'code', 'ma': 'code', 'mã npl': 'code', 'npl_code': 'code',
-        'name': 'name', 'tên': 'name', 'ten': 'name', 'tên npl': 'name',
-        'category': 'category', 'nhóm': 'category', 'nhom': 'category', 'loại': 'category', 'loai': 'category',
-        'inventory': 'inventory', 'tồn kho': 'inventory', 'ton kho': 'inventory', 'tồn': 'inventory',
-        'on_order': 'on_order', 'đang về': 'on_order', 'dang ve': 'on_order', 'đang đặt': 'on_order',
-        'leadtime': 'leadtime', 'lead time': 'leadtime', 'lt': 'leadtime',
-        'unit_price': 'unit_price', 'đơn giá': 'unit_price', 'don gia': 'unit_price', 'giá': 'unit_price',
-        'substitutes': 'substitutes', 'thay thế': 'substitutes', 'thay the': 'substitutes', 'npl thay thế': 'substitutes',
-
-        // Production Plan
-        'product_id': 'product_id', 'mã sp': 'product_id', 'ma sp': 'product_id',
-        'product_name': 'product_name', 'tên sp': 'product_name', 'ten sp': 'product_name', 'sản phẩm': 'product_name',
-        'quantity': 'quantity', 'sản lượng': 'quantity', 'san luong': 'quantity', 'số lượng': 'quantity', 'so luong': 'quantity',
-        'start_date': 'start_date', 'ngày bắt đầu': 'start_date', 'ngay bat dau': 'start_date', 'ngày sx': 'start_date',
-
-        // BOM
-        'usage_per_unit': 'usage_per_unit', 'định mức': 'usage_per_unit', 'dinh muc': 'usage_per_unit', 'usage': 'usage_per_unit'
-    };
-
-    function normalizeKey(key) {
-        if (!key) return '';
-        return String(key).toLowerCase().trim();
-    }
-
-    function mapRow(row) {
-        const mapped = {};
-        Object.keys(row).forEach(k => {
-            const norm = normalizeKey(k);
-            const target = FIELD_ALIASES[norm] || norm;
-            mapped[target] = row[k];
-        });
-        return mapped;
-    }
-
-    function detectSheetType(rows) {
-        if (!rows || rows.length === 0) return null;
-        const sample = rows[0];
-        const keys = Object.keys(sample).map(normalizeKey);
-        const fields = keys.map(k => FIELD_ALIASES[k] || k);
-
-        if (fields.includes('code') && fields.includes('inventory') && fields.includes('leadtime')) {
-            return 'npl_list';
-        }
-        if (fields.includes('product_id') && fields.includes('quantity') && fields.includes('start_date')) {
-            return 'production_plan';
-        }
-        if (fields.includes('product_id') && fields.includes('npl_code') && fields.includes('usage_per_unit')) {
-            return 'bom';
-        }
-        return null;
-    }
-
-    /**
-     * Parse 1 file Excel
-     */
-    async function parseExcelFile(file) {
-        const data = await file.arrayBuffer();
-        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-        const result = { npl_list: null, production_plan: null, bom: null };
-
-        // Duyệt qua các sheet
-        workbook.SheetNames.forEach(sheetName => {
-            const sheet = workbook.Sheets[sheetName];
-            const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
-            if (rows.length === 0) return;
-
-            // Map field names
-            const mapped = rows.map(mapRow);
-
-            // Detect type ưu tiên theo sheet name, sau đó theo content
-            const lowerName = sheetName.toLowerCase();
-            let type = null;
-            if (lowerName.includes('npl') || lowerName.includes('material')) type = 'npl_list';
-            else if (lowerName.includes('plan') || lowerName.includes('production') || lowerName.includes('kế hoạch')) type = 'production_plan';
-            else if (lowerName.includes('bom') || lowerName.includes('định mức') || lowerName.includes('dinh muc')) type = 'bom';
-            else type = detectSheetType(mapped);
-
-            if (type && !result[type]) {
-                result[type] = normalizeData(mapped, type);
-            }
-        });
-
-        return result;
-    }
-
-    /**
-     * Parse XML file
-     */
-    async function parseXMLFile(file) {
-        const text = await file.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(text, 'text/xml');
-
-        const errors = doc.getElementsByTagName('parsererror');
-        if (errors.length > 0) {
-            throw new Error('File XML không hợp lệ');
-        }
-
-        const result = { npl_list: null, production_plan: null, bom: null };
-
-        // NPL List
-        const npls = doc.querySelectorAll('NPLList > NPL, NPLs > NPL');
-        if (npls.length > 0) {
-            result.npl_list = Array.from(npls).map(node => xmlNodeToObj(node));
-            result.npl_list = normalizeData(result.npl_list, 'npl_list');
-        }
-
-        // Production Plan
-        const plans = doc.querySelectorAll('ProductionPlan > Plan, Plans > Plan, ProductionPlan > Item');
-        if (plans.length > 0) {
-            result.production_plan = Array.from(plans).map(node => xmlNodeToObj(node));
-            result.production_plan = normalizeData(result.production_plan, 'production_plan');
-        }
-
-        // BOM
-        const boms = doc.querySelectorAll('BOM > Item, BOM > Entry, BillOfMaterials > Item');
-        if (boms.length > 0) {
-            result.bom = Array.from(boms).map(node => xmlNodeToObj(node));
-            result.bom = normalizeData(result.bom, 'bom');
-        }
-
-        return result;
-    }
-
-    function xmlNodeToObj(node) {
-        const obj = {};
-        Array.from(node.children).forEach(child => {
-            obj[child.tagName] = child.textContent.trim();
-        });
-        return obj;
-    }
-
-    /**
-     * Parse CSV file
-     */
-    async function parseCSVFile(file) {
-        const text = await file.text();
-        const lines = text.split(/\r?\n/).filter(l => l.trim());
-        if (lines.length < 2) return { npl_list: null, production_plan: null, bom: null };
-
-        const parseLine = line => {
-            const result = [];
-            let cur = '', inQuote = false;
-            for (let i = 0; i < line.length; i++) {
-                const c = line[i];
-                if (c === '"') inQuote = !inQuote;
-                else if (c === ',' && !inQuote) { result.push(cur); cur = ''; }
-                else cur += c;
-            }
-            result.push(cur);
-            return result.map(s => s.replace(/^"|"$/g, '').trim());
-        };
-
-        const headers = parseLine(lines[0]);
-        const rows = lines.slice(1).map(line => {
-            const cells = parseLine(line);
-            const obj = {};
-            headers.forEach((h, i) => obj[h] = cells[i] || null);
-            return mapRow(obj);
-        });
-
-        const type = detectSheetType(rows);
-        const result = { npl_list: null, production_plan: null, bom: null };
-        if (type) result[type] = normalizeData(rows, type);
-        return result;
-    }
-
-    /**
-     * Chuẩn hóa data về đúng kiểu (number, date, array, etc.)
-     */
-    function normalizeData(rows, type) {
-        if (!rows) return null;
-
-        return rows.filter(r => Object.values(r).some(v => v !== null && v !== '')).map(row => {
-            const out = { ...row };
-
-            if (type === 'npl_list') {
-                out.inventory = parseNum(out.inventory);
-                out.on_order = parseNum(out.on_order);
-                out.leadtime = parseNum(out.leadtime);
-                out.unit_price = parseNum(out.unit_price);
-                if (typeof out.substitutes === 'string') {
-                    out.substitutes = out.substitutes.split(/[,;|]/).map(s => s.trim()).filter(Boolean);
-                } else {
-                    out.substitutes = out.substitutes || [];
-                }
-                out.category = (out.category || '').toString().toLowerCase();
-            } else if (type === 'production_plan') {
-                out.quantity = parseNum(out.quantity);
-                out.start_date = parseDate(out.start_date);
-            } else if (type === 'bom') {
-                out.usage_per_unit = parseNum(out.usage_per_unit);
-            }
-
-            return out;
-        });
-    }
-
-    function parseNum(v) {
+    function clean(v) { return v === null || v === undefined ? '' : String(v).trim(); }
+    function toNum(v) {
         if (v === null || v === undefined || v === '') return 0;
         if (typeof v === 'number') return v;
         const n = parseFloat(String(v).replace(/[,\s]/g, ''));
         return isNaN(n) ? 0 : n;
     }
-
-    function parseDate(v) {
+    function toDate(v) {
         if (!v) return null;
         if (v instanceof Date) return v.toISOString().slice(0, 10);
-        // ISO
-        if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
-        // DD/MM/YYYY
+        if (/^\d{4}-\d{2}-\d{2}/.test(v)) return String(v).slice(0, 10);
         const m = String(v).match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-        if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
-        return v;
+        if (m) return m[3] + '-' + m[2].padStart(2,'0') + '-' + m[1].padStart(2,'0');
+        if (typeof v === 'number') {
+            const date = new Date((v - 25569) * 86400 * 1000);
+            return date.toISOString().slice(0, 10);
+        }
+        return null;
     }
 
-    /**
-     * Main: parse nhiều file và merge
-     */
-    async function parseFiles(files) {
-        const merged = { npl_list: [], production_plan: [], bom: [] };
-        const fileInfo = [];
+    function detectFileType(workbook, fileName) {
+        const sheets = workbook.SheetNames || [];
+        const lowerName = (fileName || '').toLowerCase();
+        const allSheetsLower = sheets.map(s => s.toLowerCase());
+        if (allSheetsLower.indexOf('data mh') >= 0 ||
+            (allSheetsLower.some(s => s.indexOf('nl thay') >= 0) && allSheetsLower.some(s => s.indexOf('pl thay') >= 0))) {
+            return 'data_mh';
+        }
+        if (lowerName.indexOf('tồn kho') >= 0 || lowerName.indexOf('ton kho') >= 0 || lowerName.indexOf('inventory') >= 0) return 'inventory';
+        if (lowerName.indexOf('báo cáo so sánh') >= 0 || lowerName.indexOf('bao cao so sanh') >= 0 || lowerName.indexOf('đơn đang') >= 0 || lowerName.indexOf('don dang') >= 0) return 'incoming_orders';
+        if (lowerName.indexOf('tổng lượng') >= 0 || lowerName.indexOf('tong luong') >= 0 || lowerName.indexOf('báo cáo nguyên') >= 0) return 'demand_total';
+        if (lowerName.indexOf('mỗi sản phẩm') >= 0 || lowerName.indexOf('moi san pham') >= 0 || lowerName.indexOf('nguyên liệu cần thiết') >= 0) return 'demand_per_product';
+        if (lowerName.indexOf('khsx') >= 0 || lowerName.indexOf('kế hoạch sản xuất') >= 0) return 'production_plan';
+        const firstSheet = workbook.Sheets[sheets[0]];
+        const headerRow = XLSX.utils.sheet_to_json(firstSheet, { header: 1, range: 0, defval: null })[0] || [];
+        const headers = headerRow.map(h => String(h || '').toLowerCase());
+        if (headers.indexOf('mã vật tư') >= 0 && headers.indexOf('mã kho') >= 0) return 'inventory';
+        if (headers.indexOf('sl kế hoạch') >= 0 && headers.indexOf('sl thực hiện') >= 0) return 'incoming_orders';
+        if (headers.some(h => h.indexOf('cần t') >= 0) && headers.some(h => h.indexOf('thiếu t') >= 0)) return 'demand_total';
+        if (headers.some(h => h.indexOf('sl t0') >= 0)) return 'demand_per_product';
+        return 'unknown';
+    }
 
-        for (const file of files) {
-            const name = file.name.toLowerCase();
-            let parsed = null;
+    function parseDataMH(workbook) {
+        const result = { npl_master: [], substitute_groups: {} };
+        const sheet = workbook.Sheets['Data MH'];
+        if (sheet) {
+            const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
+            rows.forEach(r => {
+                const code = clean(r['Mã hàng']);
+                if (!code || code === '0') return;
+                result.npl_master.push({
+                    code: code,
+                    name: clean(r['Tên hàng']) || code,
+                    full_name: clean(r['Tên đầy đủ NSX']),
+                    origin: clean(r['Xuất xứ']),
+                    purchase_type: clean(r['Hình thức mua']),
+                    item_type: clean(r['Loại hàng']),
+                    nature: clean(r['Tính chất hàng']),
+                    parent_code: clean(r['Mã gốc']),
+                    substitute_group: clean(r['Mã thay thế']),
+                    substitute_priority: clean(r['Ưu tiên thay thế']),
+                    unit: clean(r['Đơn vị tính']),
+                    leadtime_months: toNum(r['Thời gian về kho (tháng)']),
+                    shelflife_years: toNum(r['Hạn dùng (năm)']),
+                    safety_stock_type: clean(r['Phân loại TH tính TKAT']),
+                    safety_stock_qty: toNum(r['Số lượng TKAT']),
+                    classification: clean(r['Phân loại dùng chung']),
+                    npl_type: clean(r['Phân loại NL']),
+                    products_used: clean(r['Sản phẩm sử dụng']),
+                    buyer: clean(r['Phụ trách mua hàng']),
+                    note: clean(r['Ghi chú'])
+                });
+            });
+        }
+        ['NL thay thế', 'PL thay the'].forEach(sheetName => {
+            const sh = workbook.Sheets[sheetName];
+            if (!sh) return;
+            const allRows = XLSX.utils.sheet_to_json(sh, { header: 1, defval: null });
+            let headerRowIdx = -1;
+            for (let i = 0; i < Math.min(10, allRows.length); i++) {
+                const row = allRows[i] || [];
+                if (row.indexOf('Mã hàng') >= 0 && row.some(c => String(c || '').indexOf('nhóm TT') >= 0)) {
+                    headerRowIdx = i;
+                    break;
+                }
+            }
+            if (headerRowIdx === -1) return;
+            const headers = allRows[headerRowIdx];
+            const codeIdx = headers.indexOf('Mã hàng');
+            const grpIdx = headers.findIndex(h => String(h || '').indexOf('nhóm TT') >= 0);
+            const nccIdx = headers.findIndex(h => String(h || '').indexOf('Nơi sản xuất') >= 0 || String(h || '').indexOf('Xuất xứ') >= 0);
+            const buyerIdx = headers.findIndex(h => String(h || '').indexOf('Người phụ trách') >= 0);
+            for (let i = headerRowIdx + 1; i < allRows.length; i++) {
+                const row = allRows[i] || [];
+                const code = clean(row[codeIdx]);
+                const grp = clean(row[grpIdx]);
+                if (!code || !grp) continue;
+                if (!result.substitute_groups[grp]) result.substitute_groups[grp] = [];
+                result.substitute_groups[grp].push({
+                    code: code,
+                    origin: nccIdx >= 0 ? clean(row[nccIdx]) : '',
+                    buyer: buyerIdx >= 0 ? clean(row[buyerIdx]) : ''
+                });
+            }
+        });
+        return result;
+    }
+
+    async function parseSpreadsheetXML(file, isInventory) {
+        const text = await file.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, 'text/xml');
+        if (doc.getElementsByTagName('parsererror').length > 0) throw new Error('XML không hợp lệ');
+        const rows = doc.getElementsByTagNameNS(SS_NS, 'Row');
+        const result = [];
+        let headers = null;
+        for (let i = 0; i < rows.length; i++) {
+            const cells = rows[i].getElementsByTagNameNS(SS_NS, 'Cell');
+            const values = [];
+            let cellIndex = 1;
+            for (let j = 0; j < cells.length; j++) {
+                const ssIndex = cells[j].getAttributeNS(SS_NS, 'Index');
+                if (ssIndex) cellIndex = parseInt(ssIndex);
+                const data = cells[j].getElementsByTagNameNS(SS_NS, 'Data')[0];
+                while (values.length < cellIndex - 1) values.push(null);
+                values.push(data ? data.textContent : null);
+                cellIndex++;
+            }
+            if (i === 0) {
+                headers = values.map(v => clean(v));
+                continue;
+            }
+            const row = {};
+            headers.forEach((h, idx) => row[h] = values[idx]);
+            if (isInventory) {
+                const warehouse = clean(row['Mã kho']);
+                if (ALLOWED_WAREHOUSES.indexOf(warehouse) === -1) continue;
+                const stock = toNum(row['Tồn cuối']);
+                if (stock <= 0) continue;
+                result.push({
+                    code: clean(row['Mã vật tư']),
+                    name: clean(row['Tên vật tư']),
+                    warehouse: warehouse,
+                    unit: clean(row['Đvt']),
+                    lot: clean(row['Mã lô '] || row['Mã lô']),
+                    expiry: toDate(row['Hạn dùng']),
+                    stock: stock,
+                    location: clean(row['Mã vị trí'])
+                });
+            } else {
+                const code = clean(row['Mã hàng']);
+                if (!code) continue;
+                const planned = toNum(row['Sl kế hoạch']);
+                const done = toNum(row['Sl thực hiện']);
+                const remaining = planned - done;
+                if (planned > 0 && Math.abs(remaining / planned) <= ORDER_TOLERANCE) continue;
+                if (remaining <= 0) continue;
+                result.push({
+                    code: code,
+                    name: clean(row['Tên mặt hàng']),
+                    supplier: clean(row['Tên khách']),
+                    status: clean(row['Trạng thái']),
+                    po_number: clean(row['Số ct']),
+                    order_date: toDate(row['Ngày ct']),
+                    delivery_date: toDate(row['Ngày giao']),
+                    planned: planned,
+                    done: done,
+                    on_order: remaining,
+                    unit: clean(row['Đvt'])
+                });
+            }
+        }
+        return result;
+    }
+
+    function parseDemandTotal(workbook) {
+        const sheet = workbook.Sheets['Báo cáo nguyên phụ liệu'] || workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
+        return rows.map(r => {
+            const code = clean(r['Mã nguyên liệu']);
+            if (!code) return null;
+            const item = { code: code, name: clean(r['Tên nguyên liệu']), unit: clean(r['Đơn vị']), demand: [] };
+            for (let m = 0; m <= 11; m++) {
+                item.demand.push({
+                    month: m,
+                    need: toNum(r['Cần T' + m]),
+                    remaining: toNum(r['Còn T' + m]),
+                    shortage: toNum(r['Thiếu T' + m])
+                });
+            }
+            return item;
+        }).filter(Boolean);
+    }
+
+    async function parseFiles(files) {
+        const merged = {
+            npl_master: [], substitute_groups: {}, inventory_lots: [],
+            demand_total: [], demand_per_product: [], production_plan: [], incoming_orders: []
+        };
+        const fileInfo = [];
+        for (let idx = 0; idx < files.length; idx++) {
+            const file = files[idx];
+            const name = file.name;
+            const lowerName = name.toLowerCase();
             try {
-                if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
-                    parsed = await parseExcelFile(file);
-                } else if (name.endsWith('.xml')) {
-                    parsed = await parseXMLFile(file);
-                } else if (name.endsWith('.csv')) {
-                    parsed = await parseCSVFile(file);
+                let type = null, count = 0, groups = 0;
+                if (lowerName.endsWith('.xml')) {
+                    const isInv = lowerName.indexOf('tồn kho') >= 0 || lowerName.indexOf('ton kho') >= 0 || lowerName.indexOf('inventory') >= 0;
+                    const isInc = lowerName.indexOf('báo cáo so sánh') >= 0 || lowerName.indexOf('bao cao') >= 0 || lowerName.indexOf('đơn đang') >= 0 || lowerName.indexOf('don dang') >= 0 || lowerName.indexOf('order') >= 0;
+                    if (isInv) {
+                        const data = await parseSpreadsheetXML(file, true);
+                        merged.inventory_lots = merged.inventory_lots.concat(data);
+                        type = 'inventory'; count = data.length;
+                    } else if (isInc) {
+                        const data = await parseSpreadsheetXML(file, false);
+                        merged.incoming_orders = merged.incoming_orders.concat(data);
+                        type = 'incoming_orders'; count = data.length;
+                    } else {
+                        const text = await file.text();
+                        if (text.indexOf('Mã vật tư') >= 0 && text.indexOf('Mã kho') >= 0) {
+                            const f2 = new File([text], file.name, { type: 'text/xml' });
+                            const data = await parseSpreadsheetXML(f2, true);
+                            merged.inventory_lots = merged.inventory_lots.concat(data);
+                            type = 'inventory'; count = data.length;
+                        } else if (text.indexOf('Sl kế hoạch') >= 0) {
+                            const f2 = new File([text], file.name, { type: 'text/xml' });
+                            const data = await parseSpreadsheetXML(f2, false);
+                            merged.incoming_orders = merged.incoming_orders.concat(data);
+                            type = 'incoming_orders'; count = data.length;
+                        } else {
+                            throw new Error('XML không nhận diện được loại');
+                        }
+                    }
+                } else if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) {
+                    const buf = await file.arrayBuffer();
+                    const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+                    type = detectFileType(wb, name);
+                    if (type === 'data_mh') {
+                        const data = parseDataMH(wb);
+                        merged.npl_master = merged.npl_master.concat(data.npl_master);
+                        Object.assign(merged.substitute_groups, data.substitute_groups);
+                        count = data.npl_master.length;
+                        groups = Object.keys(data.substitute_groups).length;
+                    } else if (type === 'demand_total') {
+                        const data = parseDemandTotal(wb);
+                        merged.demand_total = merged.demand_total.concat(data);
+                        count = data.length;
+                    } else if (type === 'demand_per_product') {
+                        const sheet = wb.Sheets[wb.SheetNames[0]];
+                        const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
+                        merged.demand_per_product = merged.demand_per_product.concat(rows);
+                        count = rows.length;
+                    } else if (type === 'production_plan') {
+                        const sheet = wb.Sheets[wb.SheetNames[0]];
+                        const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
+                        merged.production_plan = merged.production_plan.concat(rows);
+                        count = rows.length;
+                    } else {
+                        throw new Error('File chưa nhận diện. Sheets: ' + wb.SheetNames.join(', '));
+                    }
                 } else {
                     throw new Error('Định dạng không hỗ trợ');
                 }
-
-                const counts = [];
-                if (parsed.npl_list) { merged.npl_list = merged.npl_list.concat(parsed.npl_list); counts.push(`${parsed.npl_list.length} NPL`); }
-                if (parsed.production_plan) { merged.production_plan = merged.production_plan.concat(parsed.production_plan); counts.push(`${parsed.production_plan.length} plan SX`); }
-                if (parsed.bom) { merged.bom = merged.bom.concat(parsed.bom); counts.push(`${parsed.bom.length} BOM`); }
-
-                fileInfo.push({ name: file.name, ok: true, counts });
+                fileInfo.push({ name: name, ok: true, type: type, parsed: { count: count, groups: groups } });
             } catch (err) {
-                fileInfo.push({ name: file.name, ok: false, error: err.message });
+                fileInfo.push({ name: name, ok: false, error: err.message });
             }
         }
-
-        // Dedup NPL theo code
-        const nplMap = {};
-        merged.npl_list.forEach(n => { if (n.code) nplMap[n.code] = n; });
-        merged.npl_list = Object.values(nplMap);
-
-        return { data: merged, fileInfo };
+        return { data: merged, fileInfo: fileInfo };
     }
 
-    return {
-        parseFiles,
-        parseExcelFile,
-        parseXMLFile,
-        parseCSVFile
-    };
+    return { parseFiles: parseFiles, ALLOWED_WAREHOUSES: ALLOWED_WAREHOUSES, ORDER_TOLERANCE: ORDER_TOLERANCE };
 })();

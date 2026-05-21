@@ -3,323 +3,218 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NPL Planning | Hệ thống lập kế hoạch mua hàng nguyên phụ liệu</title>
-    <meta name="description" content="Lập kế hoạch mua NPL chuyên nghiệp cho ngành may. Upload Excel/XML, tính toán nhu cầu 3/6/8 tháng, cảnh báo thiếu hàng, đề xuất NPL thay thế.">
+    <title>NPL Planning v3 | Phụ trách: My</title>
     <link rel="stylesheet" href="css/style.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
     <div class="app-layout">
-
-        <!-- SIDEBAR -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="brand">
                     <div class="brand-icon">N</div>
                     <div class="brand-text">
                         <div class="brand-name">NPL Planning</div>
-                        <div class="brand-sub">v2.0</div>
+                        <div class="brand-sub">v3.0 · Phụ trách My</div>
                     </div>
                 </div>
-                <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Toggle sidebar">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-                </button>
+                <button class="sidebar-toggle" id="sidebar-toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
             </div>
-
             <nav class="sidebar-nav">
                 <div class="nav-group">
                     <div class="nav-label">Tổng quan</div>
-                    <a href="#" class="nav-item active" data-page="dashboard">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-                        <span>Dashboard</span>
-                    </a>
-                    <a href="#" class="nav-item" data-page="upload">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        <span>Upload dữ liệu</span>
-                    </a>
+                    <a href="#" class="nav-item active" data-page="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg><span>Dashboard</span></a>
+                    <a href="#" class="nav-item" data-page="upload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span>Upload dữ liệu</span></a>
                 </div>
-
                 <div class="nav-group">
                     <div class="nav-label">Quản lý</div>
-                    <a href="#" class="nav-item" data-page="npl">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
-                        <span>Danh sách NPL</span>
-                    </a>
-                    <a href="#" class="nav-item" data-page="production">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                        <span>Kế hoạch sản xuất</span>
-                    </a>
-                    <a href="#" class="nav-item" data-page="warnings">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                        <span>Cảnh báo</span>
-                        <span class="nav-badge" id="nav-warning-count">0</span>
-                    </a>
+                    <a href="#" class="nav-item" data-page="purchase"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span>Kế hoạch mua</span><span class="nav-badge" id="nav-purchase-count">0</span></a>
+                    <a href="#" class="nav-item" data-page="expiry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span>Hạn dùng</span><span class="nav-badge" id="nav-expiry-count">0</span></a>
+                    <a href="#" class="nav-item" data-page="warnings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><span>Cảnh báo</span><span class="nav-badge" id="nav-warning-count">0</span></a>
                 </div>
-
                 <div class="nav-group">
                     <div class="nav-label">Khác</div>
-                    <a href="#" class="nav-item" data-page="settings">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                        <span>Cài đặt</span>
-                    </a>
+                    <a href="#" class="nav-item" data-page="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6"/></svg><span>Cài đặt</span></a>
                 </div>
             </nav>
-
             <div class="sidebar-footer">
                 <button class="theme-toggle" id="theme-toggle">
-                    <svg class="icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+                    <svg class="icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>
                     <svg class="icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
                     <span class="theme-label">Chuyển nền tối</span>
                 </button>
             </div>
         </aside>
 
-        <!-- MAIN AREA -->
         <main class="main-area">
-
-            <!-- TOPBAR -->
             <header class="topbar">
-                <button class="mobile-menu" id="mobile-menu" aria-label="Mở menu">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
-                </button>
+                <button class="mobile-menu" id="mobile-menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
                 <div class="page-title">
                     <h1 id="page-title">Dashboard</h1>
-                    <p class="page-sub" id="page-subtitle">Tổng quan kế hoạch mua nguyên phụ liệu</p>
+                    <p class="page-sub" id="page-subtitle">Tổng quan kế hoạch mua NPL — Phụ trách: My</p>
                 </div>
                 <div class="topbar-actions">
-                    <div class="period-nav">
-                        <button class="period-btn active" data-period="3">3 tháng</button>
-                        <button class="period-btn" data-period="6">6 tháng</button>
-                        <button class="period-btn" data-period="8">8 tháng</button>
-                    </div>
+                    <span class="data-status" id="data-status">Dữ liệu: chưa upload</span>
                 </div>
             </header>
 
-            <!-- PAGE CONTENT -->
             <div class="page-content">
-
-                <!-- PAGE: DASHBOARD -->
                 <section class="page" data-page="dashboard">
                     <div class="hero">
                         <div class="hero-content">
-                            <div class="hero-badge">Đang theo dõi giai đoạn <span id="hero-period">3 tháng</span></div>
-                            <h2 class="hero-title">Xin chào, <span class="hero-name">Serena</span></h2>
-                            <p class="hero-desc">Hệ thống đã tính xong kế hoạch mua NPL. Có <strong id="hero-alert">0</strong> NPL cần xử lý gấp.</p>
+                            <div class="hero-badge">Phụ trách mua hàng · <strong>My</strong></div>
+                            <h2 class="hero-title">Xin chào!</h2>
+                            <p class="hero-desc" id="hero-desc">Chưa có dữ liệu. <a href="#" data-jump="upload" style="color:#fef08a;text-decoration:underline">Upload 5 file</a> để bắt đầu.</p>
                             <div class="hero-actions">
-                                <button class="btn-primary" data-jump="upload">Upload dữ liệu mới</button>
-                                <button class="btn-ghost" data-jump="warnings">Xem cảnh báo</button>
+                                <button class="btn-primary" data-jump="upload">Upload dữ liệu</button>
+                                <button class="btn-ghost" data-jump="purchase">Xem kế hoạch mua</button>
                             </div>
                         </div>
                         <div class="hero-decoration"></div>
                     </div>
 
                     <div class="kpi-grid">
-                        <div class="kpi-card">
-                            <div class="kpi-icon">📦</div>
-                            <div class="kpi-content">
-                                <div class="kpi-label">Tổng số NPL</div>
-                                <div class="kpi-value" id="kpi-total">--</div>
-                                <div class="kpi-meta">Đang theo dõi</div>
-                            </div>
-                        </div>
-                        <div class="kpi-card warning">
-                            <div class="kpi-icon">⏰</div>
-                            <div class="kpi-content">
-                                <div class="kpi-label">Cần đặt thêm</div>
-                                <div class="kpi-value" id="kpi-urgent">--</div>
-                                <div class="kpi-meta">Còn kịp leadtime</div>
-                            </div>
-                        </div>
-                        <div class="kpi-card danger">
-                            <div class="kpi-icon">⚠️</div>
-                            <div class="kpi-content">
-                                <div class="kpi-label">Thiếu gấp</div>
-                                <div class="kpi-value" id="kpi-shortage">--</div>
-                                <div class="kpi-meta">Cần xử lý ngay</div>
-                            </div>
-                        </div>
-                        <div class="kpi-card success">
-                            <div class="kpi-icon">💰</div>
-                            <div class="kpi-content">
-                                <div class="kpi-label">Tổng giá trị mua</div>
-                                <div class="kpi-value" id="kpi-value">--</div>
-                                <div class="kpi-meta" id="kpi-period-label">Giai đoạn 3 tháng</div>
-                            </div>
-                        </div>
+                        <div class="kpi-card danger" data-jump="purchase"><div class="kpi-icon">🔴</div><div class="kpi-content"><div class="kpi-label">Cực gấp</div><div class="kpi-value" id="kpi-critical">--</div><div class="kpi-meta">Thiếu T0 / leadtime</div></div></div>
+                        <div class="kpi-card warning" data-jump="purchase"><div class="kpi-icon">🟠</div><div class="kpi-content"><div class="kpi-label">Cao</div><div class="kpi-value" id="kpi-high">--</div><div class="kpi-meta">Thiếu T1-T2</div></div></div>
+                        <div class="kpi-card" data-jump="purchase"><div class="kpi-icon">🟡</div><div class="kpi-content"><div class="kpi-label">Trung bình</div><div class="kpi-value" id="kpi-medium">--</div><div class="kpi-meta">Thiếu T3-T5</div></div></div>
+                        <div class="kpi-card success" data-jump="purchase"><div class="kpi-icon">🟢</div><div class="kpi-content"><div class="kpi-label">Thấp</div><div class="kpi-value" id="kpi-low">--</div><div class="kpi-meta">Thiếu T6-T8</div></div></div>
+                    </div>
+
+                    <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
+                        <div class="kpi-card" data-jump="expiry"><div class="kpi-icon">📦</div><div class="kpi-content"><div class="kpi-label">Tổng NPL của My</div><div class="kpi-value" id="kpi-total">--</div></div></div>
+                        <div class="kpi-card danger" data-jump="expiry"><div class="kpi-icon">⚠️</div><div class="kpi-content"><div class="kpi-label">Đã hết hạn</div><div class="kpi-value" id="kpi-expired">--</div></div></div>
+                        <div class="kpi-card warning" data-jump="expiry"><div class="kpi-icon">⏰</div><div class="kpi-content"><div class="kpi-label">Còn 3 tháng</div><div class="kpi-value" id="kpi-exp3">--</div></div></div>
+                        <div class="kpi-card" data-jump="expiry"><div class="kpi-icon">📅</div><div class="kpi-content"><div class="kpi-label">Còn 6-12 tháng</div><div class="kpi-value" id="kpi-exp12">--</div></div></div>
                     </div>
 
                     <div class="card">
                         <div class="card-header">
-                            <div>
-                                <h3>Bảng kế hoạch mua hàng</h3>
-                                <p class="card-sub">Hiển thị tất cả NPL cần xử lý</p>
+                            <div><h3>Top 10 ưu tiên cần xử lý</h3><p class="card-sub">NPL có mức urgency cao nhất</p></div>
+                            <button class="btn-secondary" data-jump="purchase">Xem tất cả →</button>
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="data-table">
+                                <thead><tr><th>Mã</th><th>Tên</th><th>Phân loại</th><th class="text-right">Tồn family</th><th class="text-right">Cần T0-9T</th><th class="text-right">Mua T0</th><th class="text-right">Mua 3T</th><th class="text-right">Mua 6T</th><th class="text-right">Mua 9T</th><th>Mức khẩn</th></tr></thead>
+                                <tbody id="dashboard-table"><tr><td colspan="10" class="empty-state">Upload dữ liệu để bắt đầu</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="page" data-page="upload" hidden>
+                    <div class="card">
+                        <div class="card-header"><div><h3>Upload dữ liệu</h3><p class="card-sub">Kéo thả 5 file (Data MH, Tồn kho, Nhu cầu, Đơn đang về, KHSX). Hỗ trợ .xlsx và .xml.</p></div></div>
+                        <div class="upload-zone" id="upload-zone">
+                            <input type="file" id="file-input" multiple accept=".xlsx,.xls,.xml,.csv" hidden />
+                            <div class="upload-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+                            <div class="upload-text">
+                                <strong>Kéo thả file vào đây</strong>
+                                <p>hoặc <a href="#" id="upload-browse">chọn file từ máy</a></p>
+                                <p class="upload-hint">Có thể chọn nhiều file cùng lúc</p>
                             </div>
+                        </div>
+                        <div id="upload-result" class="upload-result" hidden></div>
+                        <div class="card" id="data-summary" hidden style="margin-top:20px">
+                            <h4 style="margin-bottom:12px">Tóm tắt dữ liệu đã load</h4>
+                            <div class="summary-grid" id="summary-grid"></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="page" data-page="purchase" hidden>
+                    <div class="card">
+                        <div class="card-header">
+                            <div><h3>Kế hoạch mua hàng chi tiết</h3><p class="card-sub">Click mã NPL để xem family, lô tồn, đơn đang về</p></div>
                             <div class="card-actions">
-                                <input type="text" id="search" placeholder="Tìm mã hoặc tên NPL..." class="input-search" />
-                                <select id="filter-status" class="input-select">
-                                    <option value="all">Tất cả trạng thái</option>
-                                    <option value="ok">Đủ hàng</option>
-                                    <option value="warning">Cần đặt thêm</option>
-                                    <option value="danger">Thiếu gấp</option>
+                                <input type="text" id="search" placeholder="Tìm mã hoặc tên..." class="input-search" />
+                                <select id="filter-urgency" class="input-select">
+                                    <option value="all">Tất cả mức khẩn</option>
+                                    <option value="CRITICAL">🔴 Cực gấp</option>
+                                    <option value="HIGH">🟠 Cao</option>
+                                    <option value="MEDIUM">🟡 Trung bình</option>
+                                    <option value="LOW">🟢 Thấp</option>
                                 </select>
-                                <select id="filter-category" class="input-select">
-                                    <option value="all">Tất cả nhóm</option>
-                                    <option value="vai">Vải</option>
-                                    <option value="chi">Chỉ</option>
-                                    <option value="nut">Nút - Khóa</option>
-                                    <option value="phukien">Phụ kiện</option>
-                                </select>
+                                <select id="filter-purchase-type" class="input-select"><option value="all">Tất cả hình thức mua</option></select>
                                 <button class="btn-secondary" id="btn-export">Xuất CSV</button>
                             </div>
                         </div>
                         <div class="table-wrapper">
                             <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Mã NPL</th>
-                                        <th>Tên NPL</th>
-                                        <th>Nhóm</th>
-                                        <th class="text-right">Tồn kho</th>
-                                        <th class="text-right">Nhu cầu</th>
-                                        <th class="text-right">Cần mua</th>
-                                        <th class="text-center">Leadtime</th>
-                                        <th class="text-center">Ngày đặt</th>
-                                        <th>Trạng thái</th>
-                                        <th>NPL thay thế</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="table-body">
-                                    <tr><td colspan="10" class="empty-state">Đang tải dữ liệu...</td></tr>
-                                </tbody>
+                                <thead><tr>
+                                    <th>Mã NPL</th><th>Tên</th><th>ĐVT</th>
+                                    <th class="text-right">Tồn family</th><th class="text-right">Đang về</th>
+                                    <th class="text-right">Cần T0</th>
+                                    <th class="text-right">Mua T0</th><th class="text-right">Mua 3T</th><th class="text-right">Mua 6T</th><th class="text-right">Mua 9T</th>
+                                    <th class="text-center">TG về (tháng)</th><th class="text-center">Hạn dùng (năm)</th>
+                                    <th>Hình thức</th><th>Mã thay thế</th><th>Mức khẩn</th>
+                                </tr></thead>
+                                <tbody id="purchase-table"><tr><td colspan="15" class="empty-state">Chưa có dữ liệu</td></tr></tbody>
                             </table>
                         </div>
                     </div>
                 </section>
 
-                <!-- PAGE: UPLOAD -->
-                <section class="page" data-page="upload" hidden>
+                <section class="page" data-page="expiry" hidden>
                     <div class="card">
                         <div class="card-header">
-                            <div>
-                                <h3>Upload dữ liệu</h3>
-                                <p class="card-sub">Kéo thả hoặc chọn file Excel (.xlsx, .xls) hoặc XML (.xml). Hỗ trợ file gộp nhiều sheet hoặc nhiều file riêng.</p>
+                            <div><h3>Quản lý hạn dùng</h3><p class="card-sub">NPL có lô gần/đã hết hạn</p></div>
+                            <div class="card-actions">
+                                <select id="filter-expiry" class="input-select">
+                                    <option value="all">Tất cả</option>
+                                    <option value="expired">Đã hết hạn</option>
+                                    <option value="3m">Còn ≤ 3 tháng</option>
+                                    <option value="6m">Còn ≤ 6 tháng</option>
+                                    <option value="12m">Còn ≤ 12 tháng</option>
+                                </select>
                             </div>
                         </div>
-
-                        <div class="upload-zone" id="upload-zone">
-                            <input type="file" id="file-input" multiple accept=".xlsx,.xls,.xml,.csv" hidden />
-                            <div class="upload-icon">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                            </div>
-                            <div class="upload-text">
-                                <strong>Kéo thả file vào đây</strong>
-                                <p>hoặc <a href="#" id="upload-browse">chọn file từ máy</a></p>
-                                <p class="upload-hint">Hỗ trợ: .xlsx, .xls, .xml, .csv (có thể chọn nhiều file)</p>
-                            </div>
-                        </div>
-
-                        <div id="upload-result" class="upload-result" hidden></div>
-
-                        <div class="template-section">
-                            <h4>Tải template mẫu</h4>
-                            <p class="template-desc">Nếu chưa biết format, tải template về điền theo:</p>
-                            <div class="template-grid">
-                                <a href="templates/npl-template-all-in-one.xlsx" class="template-card" download>
-                                    <div class="template-icon">📊</div>
-                                    <div>
-                                        <div class="template-name">Excel gộp (1 file 3 sheet)</div>
-                                        <div class="template-meta">NPL_List + Production_Plan + BOM</div>
-                                    </div>
-                                </a>
-                                <a href="templates/npl-template-separate.zip" class="template-card" download>
-                                    <div class="template-icon">📁</div>
-                                    <div>
-                                        <div class="template-name">Excel tách (3 file ZIP)</div>
-                                        <div class="template-meta">3 file Excel riêng</div>
-                                    </div>
-                                </a>
-                                <a href="templates/npl-template.xml" class="template-card" download>
-                                    <div class="template-icon">📄</div>
-                                    <div>
-                                        <div class="template-name">XML</div>
-                                        <div class="template-meta">1 file XML chuẩn</div>
-                                    </div>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- PAGE: NPL LIST -->
-                <section class="page" data-page="npl" hidden>
-                    <div class="card">
-                        <div class="card-header"><div><h3>Danh sách NPL</h3><p class="card-sub">Toàn bộ nguyên phụ liệu trong hệ thống</p></div></div>
                         <div class="table-wrapper">
                             <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Mã</th><th>Tên</th><th>Nhóm</th>
-                                        <th class="text-right">Tồn kho</th>
-                                        <th class="text-right">Đang về</th>
-                                        <th class="text-center">Leadtime</th>
-                                        <th class="text-right">Đơn giá</th>
-                                        <th>NPL thay thế</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="npl-list-body"><tr><td colspan="8" class="empty-state">--</td></tr></tbody>
+                                <thead><tr><th>Mã NPL</th><th>Tên</th><th class="text-right">Đã hết hạn</th><th class="text-right">Hết ≤ 3T</th><th class="text-right">Hết ≤ 6T</th><th class="text-right">Hết ≤ 12T</th><th class="text-right">Tổng tồn</th><th class="text-right">Nhu cầu 6T</th><th>Rủi ro</th></tr></thead>
+                                <tbody id="expiry-table"><tr><td colspan="9" class="empty-state">Chưa có dữ liệu</td></tr></tbody>
                             </table>
                         </div>
                     </div>
                 </section>
 
-                <!-- PAGE: PRODUCTION -->
-                <section class="page" data-page="production" hidden>
-                    <div class="card">
-                        <div class="card-header"><div><h3>Kế hoạch sản xuất</h3><p class="card-sub">Danh sách sản phẩm và sản lượng dự kiến</p></div></div>
-                        <div class="table-wrapper">
-                            <table class="data-table">
-                                <thead><tr><th>Mã SP</th><th>Tên sản phẩm</th><th class="text-right">Sản lượng</th><th class="text-center">Ngày bắt đầu</th></tr></thead>
-                                <tbody id="production-body"><tr><td colspan="4" class="empty-state">--</td></tr></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- PAGE: WARNINGS -->
                 <section class="page" data-page="warnings" hidden>
                     <div id="warnings-list" class="warnings-list"></div>
                 </section>
 
-                <!-- PAGE: SETTINGS -->
                 <section class="page" data-page="settings" hidden>
                     <div class="card">
-                        <div class="card-header"><div><h3>Cài đặt</h3><p class="card-sub">Tham số tính toán hệ thống</p></div></div>
+                        <div class="card-header"><div><h3>Cài đặt</h3><p class="card-sub">Cấu hình lọc và mức khẩn cấp</p></div></div>
                         <div class="settings-grid">
                             <div class="setting-item">
-                                <label>Safety stock ratio (%)</label>
-                                <input type="number" id="setting-safety" value="10" min="0" max="100" />
-                                <small>Tồn kho an toàn = nhu cầu × tỷ lệ này</small>
+                                <label>Phụ trách mua hàng (lọc)</label>
+                                <input type="text" id="setting-buyer" value="My" />
+                                <small>Mặc định "My". Để trống = hiển thị tất cả.</small>
                             </div>
                             <div class="setting-item">
-                                <label>Buffer days</label>
-                                <input type="number" id="setting-buffer" value="7" min="0" max="60" />
-                                <small>Số ngày dự phòng cộng vào leadtime</small>
+                                <label>Mức HIGH: thiếu trong tháng thứ ≤</label>
+                                <input type="number" id="setting-high" value="2" min="1" max="5" />
                             </div>
                             <div class="setting-item">
-                                <label>Ngưỡng tồn kho tối thiểu (%)</label>
-                                <input type="number" id="setting-threshold" value="20" min="0" max="100" />
-                                <small>Tồn kho thấp hơn ngưỡng này sẽ cảnh báo</small>
+                                <label>Mức MEDIUM: thiếu trong tháng thứ ≤</label>
+                                <input type="number" id="setting-medium" value="5" min="3" max="8" />
                             </div>
-                            <button class="btn-primary" id="btn-save-settings">Lưu cài đặt</button>
+                            <button class="btn-primary" id="btn-save-settings">Lưu &amp; tính lại</button>
                         </div>
                     </div>
                 </section>
-
             </div>
         </main>
+    </div>
+
+    <div class="modal-backdrop" id="modal-backdrop" hidden>
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modal-title">Chi tiết NPL</h3>
+                <button class="modal-close" id="modal-close">×</button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
     </div>
 
     <script src="js/calculator.js"></script>
