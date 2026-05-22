@@ -300,21 +300,3 @@ const NPLUploader = (function() {
 
     return { parseFiles: parseFiles, ALLOWED_WAREHOUSES: ALLOWED_WAREHOUSES, ORDER_TOLERANCE: ORDER_TOLERANCE };
 })();
-            merged.production_plan = merged.production_plan.concat(data);
-                        count = data.length;
-                    } else {
-                        throw new Error('File chưa nhận diện. Sheets: ' + wb.SheetNames.join(', '));
-                    }
-                } else {
-                    throw new Error('Định dạng không hỗ trợ');
-                }
-                fileInfo.push({ name: name, ok: true, type: type, parsed: { count: count, groups: groups } });
-            } catch (err) {
-                fileInfo.push({ name: name, ok: false, error: err.message });
-            }
-        }
-        return { data: merged, fileInfo: fileInfo };
-    }
-
-    return { parseFiles: parseFiles, ALLOWED_WAREHOUSES: ALLOWED_WAREHOUSES, ORDER_TOLERANCE: ORDER_TOLERANCE };
-})();

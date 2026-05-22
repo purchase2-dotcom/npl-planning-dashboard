@@ -438,23 +438,3 @@ const App = {
 };
 
 document.addEventListener('DOMContentLoaded', () => App.init());
-   document.getElementById('filter-purchase-type').addEventListener('change', e => { self.state.filters.purchase_type = e.target.value; self.renderPurchase(); });
-        document.getElementById('filter-expiry').addEventListener('change', e => { self.state.filters.expiry = e.target.value; self.renderExpiry(); });
-        const prodSearch = document.getElementById('prod-search');
-        if (prodSearch) prodSearch.addEventListener('input', e => { self.state.filters.prod_search = e.target.value; self.renderProduction(); });
-        document.getElementById('btn-export').addEventListener('click', () => self.exportCSV());
-        const zone = document.getElementById('upload-zone');
-        const input = document.getElementById('file-input');
-        zone.addEventListener('click', () => input.click());
-        document.getElementById('upload-browse').addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); input.click(); });
-        input.addEventListener('change', e => self.handleFiles(e.target.files));
-        ['dragenter', 'dragover'].forEach(ev => zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.add('dragover'); }));
-        ['dragleave', 'drop'].forEach(ev => zone.addEventListener(ev, e => { e.preventDefault(); zone.classList.remove('dragover'); }));
-        zone.addEventListener('drop', e => { e.preventDefault(); self.handleFiles(e.dataTransfer.files); });
-        document.getElementById('btn-save-settings').addEventListener('click', () => self.saveSettings());
-        document.getElementById('modal-close').addEventListener('click', () => self.closeDetail());
-        document.getElementById('modal-backdrop').addEventListener('click', e => { if (e.target.id === 'modal-backdrop') self.closeDetail(); });
-    }
-};
-
-document.addEventListener('DOMContentLoaded', () => App.init());
