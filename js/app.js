@@ -52,7 +52,6 @@ const App = {
         document.getElementById('warnings-list').innerHTML = '';
         document.getElementById('hero-desc').innerHTML = 'Chưa có dữ liệu cho <strong>' + this.state.context + '</strong>. <a href="#" data-jump="upload" style="color:#fef08a;text-decoration:underline">Upload 5 file</a> để bắt đầu.';
         document.getElementById('chart-urgency').innerHTML = '<div style="color:var(--text-faint);font-size:13px">Chưa có dữ liệu</div>';
-        document.getElementById('chart-topvalue').innerHTML = '<div style="color:var(--text-faint);font-size:13px">Chưa có dữ liệu</div>';
     },
 
     storageKey() {
@@ -121,17 +120,6 @@ const App = {
             '<svg width="120" height="120" viewBox="0 0 120 120">' + segPaths + '<text x="60" y="58" text-anchor="middle" font-size="22" font-weight="800" fill="var(--text)">' + items.length + '</text><text x="60" y="74" text-anchor="middle" font-size="10" fill="var(--text-muted)">NPL</text></svg>' +
             '<div class="donut-legend">' + legend + '</div>';
 
-        // Bar: top 10 value
-        const withCost = items.filter(i => i.total_cost_9m > 0).sort((a, b) => b.total_cost_9m - a.total_cost_9m).slice(0, 10);
-        const maxVal = withCost.length ? withCost[0].total_cost_9m : 1;
-        const fmtMoney = n => n >= 1e9 ? (n/1e9).toFixed(2) + ' tỷ' : n >= 1e6 ? (n/1e6).toFixed(1) + ' tr' : Math.round(n/1000) + 'K';
-        if (withCost.length === 0) {
-            document.getElementById('chart-topvalue').innerHTML = '<div style="color:var(--text-faint);font-size:13px">Chưa có NPL có giá trị mua</div>';
-        } else {
-            document.getElementById('chart-topvalue').innerHTML = withCost.map(i =>
-                '<div class="bar-row" onclick="App.showDetail(\'' + i.code + '\')" style="cursor:pointer"><span class="bar-label">' + i.code + '</span><div class="bar-track"><div class="bar-fill" style="width:' + (i.total_cost_9m / maxVal * 100) + '%"></div></div><span class="bar-value">' + fmtMoney(i.total_cost_9m) + '</span></div>'
-            ).join('');
-        }
     },
 
 
@@ -169,7 +157,7 @@ const App = {
         const self = this;
         tbody.innerHTML = items.map(i =>
             '<tr onclick="App.showDetail(\'' + i.code + '\')" style="cursor:pointer">' +
-            '<td><span class="npl-code">' + i.code + '</span></td>' +
+            '<td><div class="npl-cell-with-unit"><span class="npl-code">' + i.code + '</span><span class="unit-badge">' + (i.unit || '—') + '</span></div></td>' +
             '<td>' + self.escape(i.name || '—') + '</td>' +
             '<td>' + (i.classification || '—') + '</td>' +
             '<td class="text-right">' + self.fmt(i.total_family_inventory) + '</td>' +
@@ -195,10 +183,11 @@ const App = {
         tbody.innerHTML = items.map(i => {
             const famLabel = i.total_family_inventory > i.self_inventory ?
                 ' <small style="color:var(--text-faint)">(riêng ' + self.fmt(i.self_inventory) + ')</small>' : '';
+            const u = i.unit ? '<small style="color:var(--text-faint);font-weight:400"> ' + i.unit + '</small>' : '';
             return '<tr onclick="App.showDetail(\'' + i.code + '\')" style="cursor:pointer">' +
                 '<td><span class="npl-code">' + i.code + '</span></td>' +
                 '<td>' + self.escape(i.name || '—') + '</td>' +
-                '<td>' + (i.unit || '—') + '</td>' +
+                '<td><span class="unit-badge">' + (i.unit || '—') + '</span></td>' +
                 '<td class="text-right">' + self.fmt(i.total_family_inventory) + famLabel + '</td>' +
                 '<td class="text-right">' + self.fmt(i.incoming_total) + '</td>' +
                 '<td class="text-right">' + self.fmt(i.monthly_demand[0]) + '</td>' +
@@ -206,8 +195,8 @@ const App = {
                 '<td class="text-right">' + self.fmt(i.purchase_3m) + '</td>' +
                 '<td class="text-right">' + self.fmt(i.purchase_6m) + '</td>' +
                 '<td class="text-right">' + self.fmt(i.purchase_9m) + '</td>' +
-                '<td class="text-center">' + (i.leadtime_months || '—') + '</td>' +
-                '<td class="text-center">' + (i.shelflife_years || '—') + '</td>' +
+                '<td class="text-center">' + (i.leadtime_months ? i.leadtime_months + ' th' : '—') + '</td>' +
+                '<td class="text-center">' + (i.shelflife_years ? i.shelflife_years + ' năm' : '—') + '</td>' +
                 '<td>' + (i.purchase_type || '—') + '</td>' +
                 '<td>' + (i.substitute_group ? '<span class="substitute-tag">' + i.substitute_group + '</span>' : '—') + '</td>' +
                 '<td>' + self.urgencyPill(i.urgency) + '</td>' +
@@ -243,7 +232,7 @@ const App = {
             const risk = expSoon > demand6m ? '⚠️ Hết hạn trước khi dùng hết' : '✓ Ổn';
             const riskColor = expSoon > demand6m ? 'var(--danger)' : 'var(--success)';
             return '<tr onclick="App.showDetail(\'' + i.code + '\')" style="cursor:pointer">' +
-                '<td><span class="npl-code">' + i.code + '</span></td>' +
+                '<td><div class="npl-cell-with-unit"><span class="npl-code">' + i.code + '</span><span class="unit-badge">' + (i.unit || '—') + '</span></div></td>' +
                 '<td>' + self.escape(i.name || '—') + '</td>' +
                 '<td class="text-right" style="color:' + (i.expiry.expired > 0 ? 'var(--danger)' : 'inherit') + '">' + self.fmt(i.expiry.expired) + '</td>' +
                 '<td class="text-right" style="color:' + (i.expiry.expiring_3m > 0 ? 'var(--warning)' : 'inherit') + '">' + self.fmt(i.expiry.expiring_3m) + '</td>' +
@@ -307,28 +296,38 @@ const App = {
             html += '<p style="font-size:13px;color:var(--text-muted)">Chưa có thông tin. Upload file <strong>"3. Nhu cầu cần NPL từ T0-T11 (NPL cần cho mỗi sản phẩm)"</strong> để hệ thống tự cross-reference theo cột "Mã SP".</p>';
         } else {
             products.sort((a, b) => b.total - a.total);
-            // Table: SP × monthly + quarterly + total + via
-            html += '<div style="overflow-x:auto"><table class="data-table" style="margin-top:8px;font-size:12px">';
-            html += '<thead><tr><th rowspan="2">Mã SP</th><th rowspan="2">Tên sản phẩm</th><th colspan="12" class="text-center">Số lượng cần dùng theo tháng</th><th colspan="4" class="text-center">Theo quý</th><th rowspan="2" class="text-right">Tổng 12T</th><th rowspan="2">Mã NPL family</th></tr>';
+            html += '<div style="overflow-x:auto"><table class="data-table sp-detail-table" style="margin-top:8px;font-size:12px">';
+            html += '<thead><tr><th rowspan="2">Mã SP</th><th rowspan="2">Tên sản phẩm</th><th rowspan="2">ĐVT SP</th><th rowspan="2">Loại</th><th colspan="12" class="text-center">Số lượng theo tháng</th><th colspan="3" class="text-center">Quý</th><th rowspan="2" class="text-right">Tổng 12T</th><th rowspan="2">Mã NPL</th></tr>';
             html += '<tr>';
             for (let m = 0; m <= 11; m++) html += '<th class="text-right" style="font-size:10px">T' + m + '</th>';
-            html += '<th class="text-right" style="font-size:10px">Q1</th><th class="text-right" style="font-size:10px">Q2</th><th class="text-right" style="font-size:10px">Q3</th><th class="text-right" style="font-size:10px">Q4</th>';
+            html += '<th class="text-right" style="font-size:10px">Q1</th><th class="text-right" style="font-size:10px">Q2</th><th class="text-right" style="font-size:10px">Q3</th>';
             html += '</tr></thead><tbody>';
-            html += products.map(p => {
+            products.forEach(p => {
                 const viaList = (p.via || []).map(v => '<span class="substitute-tag" style="font-size:10px">' + v + (v === item.code ? '★' : '') + '</span>').join('');
-                let row = '<tr><td><span class="npl-code">' + p.code + '</span></td><td>' + self.escape(p.name || '—') + '</td>';
-                (p.monthly || []).forEach(v => {
-                    row += '<td class="text-right" style="' + (v > 0 ? 'color:var(--primary);font-weight:600' : 'color:var(--text-faint)') + '">' + (v ? self.fmt(v) : '—') + '</td>';
+                // Row 1: SX sản phẩm theo tháng (từ KHSX)
+                let row1 = '<tr style="background:var(--bg-subtle)"><td rowspan="2" style="vertical-align:middle"><span class="npl-code">' + p.code + '</span></td><td rowspan="2" style="vertical-align:middle">' + self.escape(p.name || '—') + '</td><td rowspan="2" style="vertical-align:middle"><strong>' + (p.product_unit || '—') + '</strong></td><td style="font-size:10px;color:var(--text-muted)">SL SX (KHSX)</td>';
+                (p.product_monthly || new Array(12).fill(0)).forEach(v => {
+                    row1 += '<td class="text-right" style="font-size:11px;color:var(--text-muted)">' + (v ? self.fmt(v) : '—') + '</td>';
                 });
-                row += '<td class="text-right">' + self.fmt(p.q1) + '</td>';
-                row += '<td class="text-right">' + self.fmt(p.q2) + '</td>';
-                row += '<td class="text-right">' + self.fmt(p.q3) + '</td>';
-                row += '<td class="text-right">' + self.fmt(p.q4) + '</td>';
-                row += '<td class="text-right"><strong>' + self.fmt(p.total) + '</strong></td>';
-                row += '<td>' + viaList + '</td></tr>';
-                return row;
-            }).join('');
+                const pTotal = (p.product_monthly || []).reduce((s, v) => s + v, 0);
+                row1 += '<td class="text-right" style="font-size:11px;color:var(--text-muted)">' + self.fmt((p.product_monthly||[]).slice(0,3).reduce((s,v)=>s+v,0)) + '</td>';
+                row1 += '<td class="text-right" style="font-size:11px;color:var(--text-muted)">' + self.fmt((p.product_monthly||[]).slice(3,6).reduce((s,v)=>s+v,0)) + '</td>';
+                row1 += '<td class="text-right" style="font-size:11px;color:var(--text-muted)">' + self.fmt((p.product_monthly||[]).slice(6,9).reduce((s,v)=>s+v,0)) + '</td>';
+                row1 += '<td class="text-right" style="font-size:11px;color:var(--text-muted)">' + self.fmt(pTotal) + '</td>';
+                row1 += '<td rowspan="2" style="vertical-align:middle">' + viaList + '</td></tr>';
+                // Row 2: NPL cần dùng theo tháng (từ file 3)
+                let row2 = '<tr><td style="font-size:10px;color:var(--primary)"><strong>NPL cần (' + (item.unit || '') + ')</strong></td>';
+                (p.monthly || []).forEach(v => {
+                    row2 += '<td class="text-right" style="' + (v > 0 ? 'color:var(--primary);font-weight:600' : 'color:var(--text-faint)') + '">' + (v ? self.fmt(v) : '—') + '</td>';
+                });
+                row2 += '<td class="text-right" style="color:var(--primary);font-weight:600">' + self.fmt(p.q1) + '</td>';
+                row2 += '<td class="text-right" style="color:var(--primary);font-weight:600">' + self.fmt(p.q2) + '</td>';
+                row2 += '<td class="text-right" style="color:var(--primary);font-weight:600">' + self.fmt(p.q3) + '</td>';
+                row2 += '<td class="text-right"><strong>' + self.fmt(p.total) + '</strong></td></tr>';
+                html += row1 + row2;
+            });
             html += '</tbody></table></div>';
+            html += '<p style="font-size:11px;color:var(--text-muted);margin-top:6px">Dòng <strong>SL SX</strong>: sản lượng sản phẩm theo KHSX (đơn vị: ĐVT SP). Dòng <strong>NPL cần</strong>: lượng NPL tiêu thụ (đơn vị: ' + (item.unit || '—') + ').</p>';
         }
         html += '</div>';
 

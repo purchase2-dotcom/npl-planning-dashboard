@@ -120,10 +120,19 @@ const NPLCalculator = (function() {
         const demand_per_product = rawData.demand_per_product || [];
         const production_plan = rawData.production_plan || [];
 
-        // Build product name lookup from KHSX
+        // Build product info lookup from KHSX (name + unit + monthly production)
         const productNameMap = {};
+        const productInfoMap = {};
         production_plan.forEach(p => {
-            if (p.product_id) productNameMap[p.product_id] = p.product_name || p.product_id;
+            if (!p.product_id) return;
+            productNameMap[p.product_id] = p.product_name || p.product_id;
+            productInfoMap[p.product_id] = {
+                name: p.product_name || p.product_id,
+                unit: p.unit || '',
+                monthly: p.monthly || new Array(12).fill(0),
+                q1: p.q1 || 0, q2: p.q2 || 0, q3: p.q3 || 0,
+                total: p.total || 0
+            };
         });
 
         // Build NPL → products map from file 3 (demand per product)
@@ -192,8 +201,13 @@ const NPLCalculator = (function() {
             family.forEach(famCode => {
                 const ps = nplToProducts[famCode] || {};
                 Object.keys(ps).forEach(pCode => {
+                    const pInfo = productInfoMap[pCode] || {};
                     if (!productsMap[pCode]) productsMap[pCode] = {
-                        code: pCode, name: ps[pCode].name, total: 0,
+                        code: pCode, name: ps[pCode].name || pInfo.name || '',
+                        product_unit: pInfo.unit || '',
+                        product_monthly: pInfo.monthly || new Array(12).fill(0),
+                        product_total: pInfo.total || 0,
+                        total: 0,
                         monthly: new Array(12).fill(0), q1: 0, q2: 0, q3: 0, q4: 0,
                         via: new Set()
                     };
