@@ -138,9 +138,20 @@
                 </section>
 
                 <section class="page" data-page="purchase" hidden>
+                    <div class="page-banner banner-purchase">
+                        <div class="banner-icon">🛒</div>
+                        <div class="banner-content">
+                            <div class="banner-title">Kế hoạch mua hàng</div>
+                            <div class="banner-desc">Danh sách NPL cần đặt mua, ngày phải đặt, số lượng đề xuất. Click NPL để xem khuyến nghị chi tiết.</div>
+                        </div>
+                        <div class="banner-stats">
+                            <div class="banner-stat"><div class="banner-stat-num" id="banner-purchase-critical">0</div><div class="banner-stat-lbl">Cần đặt gấp</div></div>
+                            <div class="banner-stat"><div class="banner-stat-num" id="banner-purchase-month">0</div><div class="banner-stat-lbl">Đặt trong tháng</div></div>
+                        </div>
+                    </div>
                     <div class="card">
                         <div class="card-header">
-                            <div><h3>Kế hoạch mua hàng chi tiết</h3><p class="card-sub">Click mã NPL để xem family, lô tồn, đơn đang về</p></div>
+                            <div><h3>Bảng kế hoạch mua hàng chi tiết</h3><p class="card-sub">Click mã NPL để xem khuyến nghị, family inventory, lô tồn, PO đang về</p></div>
                             <div class="card-actions">
                                 <input type="text" id="search" placeholder="Tìm mã hoặc tên..." class="input-search" />
                                 <select id="filter-urgency" class="input-select">
@@ -174,9 +185,20 @@
                 </section>
 
                 <section class="page" data-page="expiry" hidden>
+                    <div class="page-banner banner-expiry">
+                        <div class="banner-icon">⏰</div>
+                        <div class="banner-content">
+                            <div class="banner-title">Quản lý hạn dùng NPL</div>
+                            <div class="banner-desc">NPL có lô gần/đã hết hạn. Click NPL để xem hành động xử lý: thanh lý, đẩy lịch SX, chuyển sang NPL thay thế.</div>
+                        </div>
+                        <div class="banner-stats">
+                            <div class="banner-stat"><div class="banner-stat-num" id="banner-expiry-expired">0</div><div class="banner-stat-lbl">Đã hết hạn</div></div>
+                            <div class="banner-stat"><div class="banner-stat-num" id="banner-expiry-3m">0</div><div class="banner-stat-lbl">Hết ≤ 3T</div></div>
+                        </div>
+                    </div>
                     <div class="card">
                         <div class="card-header">
-                            <div><h3>Quản lý hạn dùng</h3><p class="card-sub">NPL có lô gần/đã hết hạn</p></div>
+                            <div><h3>Bảng NPL theo hạn dùng</h3><p class="card-sub">Hướng xử lý cụ thể cho từng NPL</p></div>
                             <div class="card-actions">
                                 <select id="filter-expiry" class="input-select">
                                     <option value="all">Tất cả</option>

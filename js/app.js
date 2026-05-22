@@ -177,6 +177,15 @@ const App = {
         document.getElementById('nav-purchase-count').textContent = s.critical + s.high;
         document.getElementById('nav-expiry-count').textContent = s.expired + s.expiring_3m;
         document.getElementById('nav-warning-count').textContent = this.state.processed.warnings.length;
+        // Banner stats
+        const items = this.state.processed.items;
+        const orderCritical = items.filter(i => i.order_recommendation && i.order_recommendation.must_order && i.order_recommendation.days_left <= 7).length;
+        const orderMonth = items.filter(i => i.order_recommendation && i.order_recommendation.must_order && i.order_recommendation.days_left > 7 && i.order_recommendation.days_left <= 30).length;
+        const el = id => document.getElementById(id);
+        if (el('banner-purchase-critical')) el('banner-purchase-critical').textContent = orderCritical;
+        if (el('banner-purchase-month')) el('banner-purchase-month').textContent = orderMonth;
+        if (el('banner-expiry-expired')) el('banner-expiry-expired').textContent = s.expired;
+        if (el('banner-expiry-3m')) el('banner-expiry-3m').textContent = s.expiring_3m;
     },
 
     renderHero() {
@@ -352,14 +361,18 @@ const App = {
         const item = this.state.processed.items.find(i => i.code === code) ||
                      this.state.processed.all_items.find(i => i.code === code);
         if (!item) return;
-        viewMode = viewMode || this.state.page; // 'expiry' or 'purchase' or 'dashboard'
+        viewMode = viewMode || this.state.page;
         const modeLabel = viewMode === 'expiry' ? '⏰ Quản lý hạn dùng' : '🛒 Kế hoạch mua';
-        document.getElementById('modal-title').innerHTML = '<span style="font-size:11px;color:var(--primary);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:8px">' + modeLabel + '</span>' + item.code + ' — ' + (item.name || '—');
         const body = document.getElementById('modal-body');
         const self = this;
-        // Build name lookup for family codes
+        // Build name lookup for family codes from ALL sources
         const nplNameMap = {};
-        (this.state.rawData.npl_master || []).forEach(m => { if (m.code) nplNameMap[m.code] = m.name || m.code; });
+        (this.state.rawData.npl_master || []).forEach(m => { if (m.code && m.name && m.name !== m.code) nplNameMap[m.code] = m.name; });
+        (this.state.rawData.inventory_lots || []).forEach(l => { if (l.code && l.name && !nplNameMap[l.code]) nplNameMap[l.code] = l.name; });
+        (this.state.rawData.demand_total || []).forEach(d => { if (d.code && d.name && !nplNameMap[d.code]) nplNameMap[d.code] = d.name; });
+        (this.state.rawData.demand_per_product || []).forEach(d => { if (d.npl_code && d.npl_name && !nplNameMap[d.npl_code]) nplNameMap[d.npl_code] = d.npl_name; });
+        const fullName = nplNameMap[item.code] || item.name || '(chưa có tên)';
+        document.getElementById('modal-title').innerHTML = '<span style="font-size:11px;color:var(--primary);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:8px">' + modeLabel + '</span><span class="npl-code" style="font-size:14px">' + item.code + '</span> <strong style="margin-left:8px">' + self.escape(fullName) + '</strong>';
         let html = '';
         // EXPIRY VIEW: Show expiry action plan FIRST
         if (viewMode === 'expiry') {
@@ -538,7 +551,8 @@ const App = {
             }
             const expDate = lot.expiry ? new Date(lot.expiry).toLocaleDateString('vi-VN') : '—';
             html += '<tr style="' + rowStyle + '">';
-            html += '<td><div style="display:flex;flex-direction:column;gap:2px"><span class="npl-code">' + lot.fam_code + (lot.is_self ? '★' : '') + '</span><small style="color:var(--text-muted);font-size:10px;line-height:1.2">' + self.escape((nplNameMap[lot.fam_code] || lot.fam_name || '').substring(0, 35)) + '</small></div></td>';
+            const lotFamName = nplNameMap[lot.fam_code] || lot.fam_name || lot.name || '';
+            html += '<td><div style="display:flex;flex-direction:column;gap:2px;min-width:180px"><span class="npl-code">' + lot.fam_code + (lot.is_self ? ' ★' : '') + '</span><small style="color:var(--text);font-size:11px;line-height:1.3;font-weight:500">' + self.escape(lotFamName || '(chưa có tên)') + '</small></div></td>';
             html += '<td>' + (lot.lot || '—') + '</td>';
             html += '<td>' + (lot.warehouse || '—') + '</td>';
             html += '<td class="text-right">' + self.fmt(lot.stock) + '</td>';
