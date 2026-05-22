@@ -65,6 +65,12 @@
 
             <div class="page-content">
                 <section class="page" data-page="dashboard">
+                    <div class="exec-summary" id="exec-summary" hidden>
+                        <h3>📊 Executive Summary — Hành động cần làm hôm nay</h3>
+                        <div class="exec-headline" id="exec-headline">Đang tính toán...</div>
+                        <div class="exec-actions" id="exec-actions"></div>
+                    </div>
+
                     <div class="hero">
                         <div class="hero-content">
                             <div class="hero-badge">Phụ trách mua hàng · <strong>My</strong></div>
@@ -155,10 +161,13 @@
                                     <th class="text-right">Tồn family</th><th class="text-right">Đang về</th>
                                     <th class="text-right">Cần T0</th>
                                     <th class="text-right">Mua T0</th><th class="text-right">Mua 3T</th><th class="text-right">Mua 6T</th><th class="text-right">Mua 9T</th>
+                                    <th class="text-right" style="background:var(--primary-light);color:var(--primary)">SL đề xuất</th>
+                                    <th class="text-center" style="background:var(--primary-light);color:var(--primary)">Hạn đặt PO</th>
+                                    <th class="text-center" style="background:var(--primary-light);color:var(--primary)">Hàng về trước</th>
                                     <th class="text-center">TG về</th><th class="text-center">Hạn dùng</th>
                                     <th>Hình thức</th><th>Mã thay thế</th><th>Mức khẩn</th>
                                 </tr></thead>
-                                <tbody id="purchase-table"><tr><td colspan="15" class="empty-state">Chưa có dữ liệu</td></tr></tbody>
+                                <tbody id="purchase-table"><tr><td colspan="18" class="empty-state">Chưa có dữ liệu</td></tr></tbody>
                             </table>
                         </div>
                     </div>

@@ -111,73 +111,70 @@ const NPLCalculator = (function() {
 
         if (firstShortageMonth < 0) {
             return {
-                must_order: false,
-                latest_date: null,
-                days_left: null,
-                recommended_qty: 0,
-                reason: 'Đủ tồn cho 12 tháng tới, chưa cần đặt'
+                must_order: false, latest_date: null, days_left: null, recommended_qty: 0,
+                arrive_before: null, headline: 'Đủ tồn',
+                reasons: ['Đủ tồn cho 12 tháng tới, chưa cần đặt PO']
             };
         }
 
-        // Tháng bắt đầu thiếu → ngày bắt đầu thiếu
         const shortageStartDate = new Date(today);
         shortageStartDate.setDate(shortageStartDate.getDate() + firstShortageMonth * daysPerMonth);
-
-        // Ngày trễ nhất phải đặt = ngày bắt đầu thiếu - leadtime
         const latestOrderDate = new Date(shortageStartDate);
         latestOrderDate.setDate(latestOrderDate.getDate() - leadtimeDays);
-
         const daysLeft = Math.floor((latestOrderDate - today) / (1000 * 60 * 60 * 24));
 
-        // Lượng đề xuất: cân giữa shortage và shelf life
-        // Tính nhu cầu trong khoảng [today + leadtime, today + leadtime + min(shelflife, 12mo)]
         const shelflifeMonths = shelflifeYears > 0 ? Math.min(shelflifeYears * 12, 12) : 12;
         const startMonth = leadtimeMonths || 1;
         const endMonth = Math.min(startMonth + shelflifeMonths, 12);
 
         let demandInWindow = 0;
-        for (let m = startMonth; m < endMonth; m++) {
-            demandInWindow += monthlyDemand[m] || 0;
-        }
-        // Trừ tồn hiện tại
+        for (let m = startMonth; m < endMonth; m++) demandInWindow += monthlyDemand[m] || 0;
         const recommendedQty = Math.max(0, demandInWindow - totalInventory);
 
-        // Phân bố tháng có đều hay không
         const monthsWithDemand = monthlyDemand.slice(0, 12).filter(d => d > 0).length;
-        const evenness = monthsWithDemand >= 6 ? 'đều' : monthsWithDemand >= 3 ? 'tương đối đều' : 'không đều';
+        const evenness = monthsWithDemand >= 8 ? 'đều' : monthsWithDemand >= 4 ? 'tương đối đều' : 'không đều (tập trung 1-3 tháng)';
+        const peakMonth = monthlyDemand.indexOf(Math.max(...monthlyDemand));
 
-        let reason;
+        // Headline
+        let headline;
+        if (daysLeft < 0) headline = '🚨 PHẢI ĐẶT NGAY (đã trễ ' + Math.abs(daysLeft) + ' ngày)';
+        else if (daysLeft <= 7) headline = '⏰ Đặt PO trong tuần này';
+        else if (daysLeft <= 30) headline = '📅 Đặt PO trong tháng này';
+        else headline = '✓ Còn ' + daysLeft + ' ngày để chuẩn bị PO';
+
+        // Multi-line reasons
+        const reasons = [];
+        reasons.push('Lịch SX bắt đầu sử dụng NPL này từ <strong>T' + firstShortageMonth + '</strong> (' + shortageStartDate.toLocaleDateString('vi-VN') + ')');
+        reasons.push('Leadtime của NPL: <strong>' + (leadtimeMonths || 1) + ' tháng</strong> → phải đặt trước <strong>' + latestOrderDate.toLocaleDateString('vi-VN') + '</strong>');
         if (daysLeft < 0) {
-            reason = '🚨 ĐÃ TRỄ ' + Math.abs(daysLeft) + ' ngày - đặt NGAY không chờ. Lịch SX sẽ bị thiếu hàng.';
-        } else if (daysLeft <= 7) {
-            reason = '⏰ Còn ' + daysLeft + ' ngày để đặt PO, kế hoạch SX bắt đầu T' + firstShortageMonth;
-        } else if (daysLeft <= 30) {
-            reason = '📅 Đặt trong tháng này (' + daysLeft + ' ngày nữa)';
+            reasons.push('<span style="color:var(--danger);font-weight:700">Hôm nay đã muộn ' + Math.abs(daysLeft) + ' ngày — đặt ngay để giảm thiệt hại, NCC có thể ship gấp với phụ phí</span>');
         } else {
-            reason = 'Đặt trước ' + latestOrderDate.toLocaleDateString('vi-VN') + ' (còn ' + daysLeft + ' ngày)';
+            reasons.push('Tính từ hôm nay còn <strong>' + daysLeft + ' ngày</strong> để chuẩn bị PO (gửi NCC, duyệt, thanh toán)');
         }
+        reasons.push('Tồn family hiện tại + đang về: <strong>' + Math.round(totalInventory).toLocaleString('vi-VN') + '</strong> → dùng được đến T' + (firstShortageMonth - 1 < 0 ? '0' : firstShortageMonth - 1));
+        reasons.push('Nhu cầu trong window <strong>' + (endMonth - startMonth) + ' tháng</strong> (từ T' + startMonth + ' đến T' + (endMonth-1) + '): <strong>' + Math.round(demandInWindow).toLocaleString('vi-VN') + '</strong>');
+        reasons.push('Lượng đề xuất = nhu cầu window − tồn = <strong>' + Math.round(recommendedQty).toLocaleString('vi-VN') + '</strong>');
 
-        // Cân nhắc shelf life
-        let qtyAdvice = '';
-        if (shelflifeYears > 0 && shelflifeYears < 1) {
-            const fullDemand12m = monthlyDemand.reduce((s, v) => s + v, 0);
-            if (recommendedQty < fullDemand12m * 0.6) {
-                qtyAdvice = ' · Hạn dùng ngắn (' + shelflifeYears + ' năm) - chia nhiều đợt nhỏ thay vì 1 lô lớn.';
+        if (shelflifeYears > 0) {
+            if (shelflifeYears < 1) {
+                reasons.push('⚠️ Hạn dùng ngắn (<strong>' + shelflifeYears + ' năm</strong>) - đặt nhiều có thể hết hạn trước khi dùng. Cân nhắc chia 2-3 đợt nhỏ.');
+            } else if (shelflifeYears >= 2) {
+                reasons.push('Hạn dùng dài (' + shelflifeYears + ' năm) - có thể đặt 1 lô lớn cover nhiều quý');
             }
         }
-        if (evenness !== 'đều') {
-            qtyAdvice += ' · Nhu cầu ' + evenness + ' - cân nhắc đặt đúng thời điểm cao điểm.';
+        if (evenness === 'không đều (tập trung 1-3 tháng)') {
+            reasons.push('📊 Nhu cầu <strong>không đều</strong> - tập trung quanh T' + peakMonth + '. Đặt sao cho hàng về kịp T' + peakMonth + ', không cần đặt sớm quá.');
+        } else if (evenness === 'đều') {
+            reasons.push('📊 Nhu cầu phân bố <strong>đều</strong> các tháng - đặt 1 lô lớn an toàn');
         }
 
         return {
             must_order: recommendedQty > 0,
-            latest_date: latestOrderDate,
-            latest_date_str: latestOrderDate.toLocaleDateString('vi-VN'),
-            days_left: daysLeft,
-            recommended_qty: Math.round(recommendedQty),
-            window_months: endMonth - startMonth,
-            reason: reason + qtyAdvice,
-            evenness: evenness
+            latest_date: latestOrderDate, latest_date_str: latestOrderDate.toLocaleDateString('vi-VN'),
+            arrive_before: shortageStartDate, arrive_before_str: shortageStartDate.toLocaleDateString('vi-VN'),
+            days_left: daysLeft, recommended_qty: Math.round(recommendedQty),
+            window_months: endMonth - startMonth, headline: headline, reasons: reasons,
+            evenness: evenness, first_shortage_month: firstShortageMonth
         };
     }
 

@@ -112,6 +112,47 @@ button { font-family: inherit; cursor: pointer; }
 .warning-card:hover { transform: translateX(4px); }
 .npl-cell-with-unit { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
+/* Recommendation banner */
+.rec-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.6px; margin-bottom: 4px; }
+.rec-value { font-size: 17px; font-weight: 800; color: var(--text); letter-spacing: -0.2px; font-variant-numeric: tabular-nums; }
+.rec-banner.critical { animation: pulseDanger 2s ease-in-out infinite; }
+@keyframes pulseDanger { 0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); } }
+
+/* Executive Summary Card */
+.exec-summary { background: linear-gradient(135deg, var(--bg-surface), var(--bg-subtle)); border: 1px solid var(--border); border-radius: 16px; padding: 24px 28px; margin-bottom: 24px; box-shadow: var(--shadow-md); position: relative; overflow: hidden; }
+.exec-summary::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; background: var(--gradient-card); }
+.exec-summary h3 { font-size: 13px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+.exec-summary .exec-headline { font-size: 22px; font-weight: 800; color: var(--text); margin-bottom: 14px; letter-spacing: -0.5px; }
+.exec-summary .exec-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.exec-action { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 999px; padding: 8px 14px; font-size: 12.5px; font-weight: 600; color: var(--text); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; transition: all 0.15s; }
+.exec-action:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.exec-action.critical { background: var(--danger-light); color: var(--danger); border-color: var(--danger); }
+.exec-action.warning { background: var(--warning-light); color: var(--warning); border-color: var(--warning); }
+.exec-action.info { background: var(--info-light); color: var(--info); border-color: var(--info); }
+.exec-action-count { font-weight: 800; font-size: 13px; }
+
+/* Pulse for critical KPI */
+.kpi-card.danger .kpi-value { color: var(--danger); }
+.kpi-card.danger.has-issues .kpi-icon { animation: pulseRed 1.5s ease-in-out infinite; }
+@keyframes pulseRed { 0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.3); } 50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); } }
+
+/* Report-style table improvements */
+.data-table thead th { background: linear-gradient(180deg, var(--bg-subtle), var(--bg-app)); border-bottom: 2px solid var(--border-strong); }
+.data-table tbody tr { border-left: 3px solid transparent; }
+.data-table tbody tr:hover { border-left-color: var(--primary); }
+
+/* Section divider */
+.section-divider { display: flex; align-items: center; gap: 14px; margin: 28px 0 16px; }
+.section-divider-line { flex: 1; height: 1px; background: var(--border); }
+.section-divider-label { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1.2px; }
+
+/* Print styling */
+@media print {
+    .sidebar, .topbar, .hero-actions, .card-actions, .modal-backdrop { display: none !important; }
+    .main-area { margin: 0; }
+    .card { break-inside: avoid; box-shadow: none; border: 1px solid #ddd; }
+}
+
 .page-content { padding: 28px; flex: 1; }
 .page { animation: fadeIn 0.3s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }

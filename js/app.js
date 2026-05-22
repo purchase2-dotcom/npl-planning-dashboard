@@ -77,6 +77,7 @@ const App = {
 
     render() {
         if (!this.state.processed) return;
+        this.renderExecSummary();
         this.renderKPIs();
         this.renderHero();
         this.renderDashboard();
@@ -122,6 +123,46 @@ const App = {
 
     },
 
+
+    renderExecSummary() {
+        const items = this.state.processed.items;
+        const stats = this.state.processed.stats;
+        const summary = document.getElementById('exec-summary');
+        if (!summary) return;
+        summary.hidden = false;
+
+        // Count NPL by order urgency (using order_recommendation)
+        const orderLate = items.filter(i => i.order_recommendation && i.order_recommendation.must_order && i.order_recommendation.days_left < 0).length;
+        const orderThisWeek = items.filter(i => i.order_recommendation && i.order_recommendation.must_order && i.order_recommendation.days_left >= 0 && i.order_recommendation.days_left <= 7).length;
+        const orderThisMonth = items.filter(i => i.order_recommendation && i.order_recommendation.must_order && i.order_recommendation.days_left > 7 && i.order_recommendation.days_left <= 30).length;
+        const expiredCount = stats.expired;
+        const expiringSoon = stats.expiring_3m;
+
+        // Headline
+        let headline;
+        if (orderLate > 0) {
+            headline = '🚨 Có <strong>' + orderLate + ' NPL đã trễ hạn đặt</strong> — xử lý NGAY HÔM NAY';
+        } else if (orderThisWeek > 0) {
+            headline = '⏰ Có <strong>' + orderThisWeek + ' NPL phải đặt trong tuần này</strong>';
+        } else if (orderThisMonth > 0) {
+            headline = '📅 Có <strong>' + orderThisMonth + ' NPL cần lên PO trong tháng</strong>';
+        } else if (expiredCount > 0 || expiringSoon > 0) {
+            headline = '⚠️ Cần xử lý <strong>' + (expiredCount + expiringSoon) + ' NPL liên quan hạn dùng</strong>';
+        } else {
+            headline = '✓ Tình hình NPL ổn định, không có action gấp';
+        }
+        document.getElementById('exec-headline').innerHTML = headline;
+
+        // Action chips
+        const actions = [];
+        if (orderLate > 0) actions.push('<span class="exec-action critical" onclick="App.goToPage(\'purchase\'); App.state.filters.urgency=\'CRITICAL\'; document.getElementById(\'filter-urgency\').value=\'CRITICAL\'; App.renderPurchase();">🚨 <span class="exec-action-count">' + orderLate + '</span> NPL đã trễ → xử lý ngay</span>');
+        if (orderThisWeek > 0) actions.push('<span class="exec-action warning" onclick="App.goToPage(\'purchase\')">⏰ <span class="exec-action-count">' + orderThisWeek + '</span> đặt trong tuần</span>');
+        if (orderThisMonth > 0) actions.push('<span class="exec-action info" onclick="App.goToPage(\'purchase\')">📅 <span class="exec-action-count">' + orderThisMonth + '</span> đặt trong tháng</span>');
+        if (expiredCount > 0) actions.push('<span class="exec-action critical" onclick="App.goToPage(\'expiry\')">⛔ <span class="exec-action-count">' + expiredCount + '</span> NPL đã hết hạn — thanh lý</span>');
+        if (expiringSoon > 0) actions.push('<span class="exec-action warning" onclick="App.goToPage(\'expiry\')">⏰ <span class="exec-action-count">' + expiringSoon + '</span> NPL hết hạn ≤3T</span>');
+        if (stats.no_demand_but_stock > 0) actions.push('<span class="exec-action info" onclick="App.goToPage(\'warnings\')">📦 <span class="exec-action-count">' + stats.no_demand_but_stock + '</span> NPL tồn không KHSX</span>');
+        document.getElementById('exec-actions').innerHTML = actions.length ? actions.join('') : '<span style="color:var(--text-muted);font-size:13px">Không có hành động nào cần làm gấp</span>';
+    },
 
     renderKPIs() {
         const s = this.state.processed.stats;
@@ -176,14 +217,25 @@ const App = {
             .sort((a, b) => b.urgency.score - a.urgency.score || b.purchase_9m - a.purchase_9m);
         const tbody = document.getElementById('purchase-table');
         if (items.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="15" class="empty-state">Không có NPL phù hợp bộ lọc</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="18" class="empty-state">Không có NPL phù hợp bộ lọc</td></tr>';
             return;
         }
         const self = this;
         tbody.innerHTML = items.map(i => {
             const famLabel = i.total_family_inventory > i.self_inventory ?
                 ' <small style="color:var(--text-faint)">(riêng ' + self.fmt(i.self_inventory) + ')</small>' : '';
-            const u = i.unit ? '<small style="color:var(--text-faint);font-weight:400"> ' + i.unit + '</small>' : '';
+            const rec = i.order_recommendation || {};
+            // Hạn đặt PO + tô màu theo độ gấp
+            let orderDate = '—', orderDateStyle = '';
+            if (rec.latest_date_str) {
+                orderDate = rec.latest_date_str;
+                if (rec.days_left < 0) { orderDate += ' <small style="color:var(--danger);font-weight:700">(TRỄ ' + Math.abs(rec.days_left) + 'd)</small>'; orderDateStyle = 'background:var(--danger-light)'; }
+                else if (rec.days_left <= 7) { orderDate += ' <small style="color:var(--warning);font-weight:600">(' + rec.days_left + 'd)</small>'; orderDateStyle = 'background:var(--warning-light)'; }
+                else if (rec.days_left <= 30) { orderDate += ' <small style="color:var(--warning)">(' + rec.days_left + 'd)</small>'; }
+                else orderDate += ' <small style="color:var(--text-muted)">(' + rec.days_left + 'd)</small>';
+            }
+            const arriveBefore = rec.arrive_before_str || '—';
+            const recQty = rec.recommended_qty || 0;
             return '<tr onclick="App.showDetail(\'' + i.code + '\')" style="cursor:pointer">' +
                 '<td><span class="npl-code">' + i.code + '</span></td>' +
                 '<td>' + self.escape(i.name || '—') + '</td>' +
@@ -195,6 +247,9 @@ const App = {
                 '<td class="text-right">' + self.fmt(i.purchase_3m) + '</td>' +
                 '<td class="text-right">' + self.fmt(i.purchase_6m) + '</td>' +
                 '<td class="text-right">' + self.fmt(i.purchase_9m) + '</td>' +
+                '<td class="text-right" style="background:var(--primary-light)"><strong style="color:var(--primary)">' + self.fmt(recQty) + '</strong></td>' +
+                '<td class="text-center" style="' + orderDateStyle + '">' + orderDate + '</td>' +
+                '<td class="text-center" style="font-weight:600;color:var(--text)">' + arriveBefore + '</td>' +
                 '<td class="text-center">' + (i.leadtime_months ? i.leadtime_months + ' th' : '—') + '</td>' +
                 '<td class="text-center">' + (i.shelflife_years ? i.shelflife_years + ' năm' : '—') + '</td>' +
                 '<td>' + (i.purchase_type || '—') + '</td>' +
@@ -301,20 +356,28 @@ const App = {
         const body = document.getElementById('modal-body');
         const self = this;
         let html = '';
-        // Order recommendation banner
+        // Order recommendation banner (multi-line reasons)
         const rec = item.order_recommendation;
         if (rec && rec.must_order) {
-            const bgColor = rec.days_left < 0 ? 'var(--danger-light)' : rec.days_left <= 30 ? 'var(--warning-light)' : 'var(--info-light)';
-            const txtColor = rec.days_left < 0 ? 'var(--danger)' : rec.days_left <= 30 ? 'var(--warning)' : 'var(--info)';
+            const isCritical = rec.days_left < 0;
+            const isUrgent = rec.days_left <= 30;
+            const bgColor = isCritical ? 'var(--danger-light)' : isUrgent ? 'var(--warning-light)' : 'var(--info-light)';
+            const txtColor = isCritical ? 'var(--danger)' : isUrgent ? 'var(--warning)' : 'var(--info)';
             html += '<div class="detail-section"><h4>Khuyến nghị đặt hàng</h4>';
-            html += '<div style="background:' + bgColor + ';border-left:4px solid ' + txtColor + ';padding:14px 18px;border-radius:8px">';
-            html += '<div style="font-size:18px;font-weight:700;color:' + txtColor + ';margin-bottom:6px">' + rec.reason + '</div>';
-            html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-top:10px">';
-            html += '<div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:600;letter-spacing:0.5px">Ngày trễ nhất phải đặt</div><div style="font-size:15px;font-weight:700;margin-top:2px">' + rec.latest_date_str + '</div></div>';
-            html += '<div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:600;letter-spacing:0.5px">Còn lại</div><div style="font-size:15px;font-weight:700;margin-top:2px">' + (rec.days_left < 0 ? 'TRỄ ' + Math.abs(rec.days_left) + ' ngày' : rec.days_left + ' ngày') + '</div></div>';
-            html += '<div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:600;letter-spacing:0.5px">Số lượng đề xuất</div><div style="font-size:15px;font-weight:700;margin-top:2px">' + self.fmt(rec.recommended_qty) + ' ' + (item.unit || '') + '</div></div>';
-            html += '<div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:600;letter-spacing:0.5px">Bao phủ</div><div style="font-size:15px;font-weight:700;margin-top:2px">' + rec.window_months + ' tháng</div></div>';
-            html += '</div></div></div>';
+            html += '<div class="rec-banner ' + (isCritical ? 'critical' : isUrgent ? 'urgent' : 'normal') + '" style="background:' + bgColor + ';border-left:5px solid ' + txtColor + ';padding:18px 22px;border-radius:10px">';
+            html += '<div style="font-size:20px;font-weight:800;color:' + txtColor + ';margin-bottom:14px;letter-spacing:-0.3px">' + rec.headline + '</div>';
+            html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:16px;padding:14px;background:rgba(255,255,255,0.5);border-radius:8px">';
+            html += '<div><div class="rec-label">Hạn đặt PO</div><div class="rec-value">' + rec.latest_date_str + '</div></div>';
+            html += '<div><div class="rec-label">Còn lại</div><div class="rec-value" style="color:' + txtColor + '">' + (rec.days_left < 0 ? 'TRỄ ' + Math.abs(rec.days_left) + ' ngày' : rec.days_left + ' ngày') + '</div></div>';
+            html += '<div><div class="rec-label">SL đề xuất</div><div class="rec-value">' + self.fmt(rec.recommended_qty) + ' <small style="font-weight:500">' + (item.unit || '') + '</small></div></div>';
+            html += '<div><div class="rec-label">Hàng về trước</div><div class="rec-value">' + rec.arrive_before_str + '</div></div>';
+            html += '<div><div class="rec-label">Bao phủ</div><div class="rec-value">' + rec.window_months + ' tháng</div></div>';
+            html += '</div>';
+            html += '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text-muted);margin-bottom:8px">📋 Lý do & phân tích</div>';
+            html += '<ul style="margin:0;padding-left:20px;font-size:13.5px;line-height:1.8">';
+            (rec.reasons || []).forEach(r => { html += '<li style="margin-bottom:4px">' + r + '</li>'; });
+            html += '</ul>';
+            html += '</div></div>';
         }
 
         html += '<div class="detail-section"><h4>Thông tin cơ bản</h4><div class="detail-grid">';
@@ -521,7 +584,7 @@ const App = {
         try {
             const out = await NPLUploader.parseFiles(Array.from(files));
             if (this.state.rawData) {
-                ['npl_master', 'inventory_lots', 'demand_total', 'incoming_orders', 'production_plan'].forEach(k => {
+                ['npl_master', 'inventory_lots', 'demand_total', 'demand_per_product', 'incoming_orders', 'production_plan'].forEach(k => {
                     if (out.data[k] && out.data[k].length) this.state.rawData[k] = out.data[k];
                 });
                 if (out.data.substitute_groups && Object.keys(out.data.substitute_groups).length) {
