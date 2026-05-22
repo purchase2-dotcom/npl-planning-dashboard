@@ -14,7 +14,6 @@ const App = {
         purchase:  { title: 'Kế hoạch mua', sub: 'Chi tiết NPL cần mua phân theo mức khẩn cấp' },
         expiry:    { title: 'Quản lý hạn dùng', sub: 'NPL có lô gần hết hạn cần ưu tiên dùng' },
         warnings:  { title: 'Cảnh báo', sub: 'Tổng hợp các vấn đề cần xử lý' },
-        production:{ title: 'Kế hoạch sản xuất', sub: 'Sản lượng dự kiến từng sản phẩm T0-T11' },
         settings:  { title: 'Cài đặt', sub: 'Cấu hình bộ lọc và mức khẩn' }
     },
 
@@ -85,7 +84,6 @@ const App = {
         this.renderPurchase();
         this.renderExpiry();
         this.renderWarnings();
-        this.renderProduction();
         this.renderCharts();
         this.populateFilters();
     },
@@ -136,28 +134,6 @@ const App = {
         }
     },
 
-    renderProduction() {
-        const tbody = document.getElementById('production-table');
-        if (!tbody) return;
-        const list = (this.state.rawData && this.state.rawData.production_plan) || [];
-        const q = (this.state.filters.prod_search || '').toLowerCase();
-        const filtered = q ? list.filter(p =>
-            p.product_id.toLowerCase().indexOf(q) >= 0 || (p.product_name || '').toLowerCase().indexOf(q) >= 0
-        ) : list;
-        if (filtered.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="16" class="empty-state">' + (list.length === 0 ? 'Chưa có KHSX, upload file KHSX để xem' : 'Không có sản phẩm phù hợp') + '</td></tr>';
-            return;
-        }
-        const self = this;
-        tbody.innerHTML = filtered.slice(0, 200).map(p => {
-            const cells = p.monthly.map(v => '<td class="text-right">' + (v ? self.fmt(v) : '—') + '</td>').join('');
-            return '<tr><td><span class="npl-code">' + p.product_id + '</span></td>' +
-                '<td>' + self.escape(p.product_name || '—') + '</td>' +
-                '<td>' + (p.unit || '—') + '</td>' +
-                cells +
-                '<td class="text-right"><strong>' + self.fmt(p.total) + '</strong></td></tr>';
-        }).join('');
-    },
 
     renderKPIs() {
         const s = this.state.processed.stats;
@@ -326,22 +302,19 @@ const App = {
         html += '<div><span class="detail-label">Mức khẩn cấp</span><span class="detail-value">' + this.urgencyPill(item.urgency) + '</span></div>';
         html += '</div></div>';
 
-        // Products using this NPL
+        // Products using this NPL (from file 3 demand_per_product)
         const products = item.products_used_list || [];
-        const groupMemberProducts = new Set(products);
-        // Aggregate products from all family members
-        (item.substitute_group_members || []).forEach(mem => {
-            const memMaster = (this.state.rawData.npl_master || []).find(m => m.code === mem.code);
-            if (memMaster && memMaster.products_used) {
-                String(memMaster.products_used).split(/[,;|\s]+/).filter(Boolean).forEach(p => groupMemberProducts.add(p));
-            }
-        });
-        const allProducts = Array.from(groupMemberProducts);
-        html += '<div class="detail-section"><h4>Sản phẩm sử dụng NPL này / nhóm thay thế</h4>';
-        if (allProducts.length === 0) {
-            html += '<p style="font-size:13px;color:var(--text-muted)">Chưa có thông tin. Điền vào cột "Sản phẩm sử dụng" trong file Data MH (format: <code>SP001, SP002, SP003</code>) để hệ thống tự tổng hợp.</p>';
+        html += '<div class="detail-section"><h4>Sản phẩm sử dụng NPL này / nhóm thay thế (' + products.length + ' SP)</h4>';
+        if (products.length === 0) {
+            html += '<p style="font-size:13px;color:var(--text-muted)">Chưa có thông tin. Upload file <strong>"3. Nhu cầu cần NPL từ T0-T11 (NPL cần cho mỗi sản phẩm)"</strong> để hệ thống tự cross-reference theo cột "Mã SP".</p>';
         } else {
-            html += '<div style="display:flex;flex-wrap:wrap;gap:6px">' + allProducts.map(p => '<span class="substitute-tag">' + p + '</span>').join('') + '</div>';
+            products.sort((a, b) => b.total - a.total);
+            html += '<table class="data-table" style="margin-top:8px"><thead><tr><th>Mã SP</th><th>Tên sản phẩm</th><th class="text-right">SL tổng cần (12T)</th><th>Mã NPL trong family</th></tr></thead><tbody>';
+            html += products.map(p => {
+                const viaList = (p.via || []).map(v => '<span class="substitute-tag" style="font-size:10px">' + v + (v === item.code ? ' (chính)' : '') + '</span>').join('');
+                return '<tr><td><span class="npl-code">' + p.code + '</span></td><td>' + self.escape(p.name || '—') + '</td><td class="text-right"><strong>' + self.fmt(p.total) + '</strong></td><td>' + viaList + '</td></tr>';
+            }).join('');
+            html += '</tbody></table>';
         }
         html += '</div>';
 
@@ -533,8 +506,6 @@ const App = {
         document.getElementById('filter-urgency').addEventListener('change', e => { self.state.filters.urgency = e.target.value; self.renderPurchase(); });
         document.getElementById('filter-purchase-type').addEventListener('change', e => { self.state.filters.purchase_type = e.target.value; self.renderPurchase(); });
         document.getElementById('filter-expiry').addEventListener('change', e => { self.state.filters.expiry = e.target.value; self.renderExpiry(); });
-        const prodSearch = document.getElementById('prod-search');
-        if (prodSearch) prodSearch.addEventListener('input', e => { self.state.filters.prod_search = e.target.value; self.renderProduction(); });
         document.getElementById('btn-export').addEventListener('click', () => self.exportCSV());
         const zone = document.getElementById('upload-zone');
         const input = document.getElementById('file-input');

@@ -117,6 +117,27 @@ const NPLCalculator = (function() {
         const inventory_lots = rawData.inventory_lots || [];
         const demand_total = rawData.demand_total || [];
         const incoming_orders = rawData.incoming_orders || [];
+        const demand_per_product = rawData.demand_per_product || [];
+        const production_plan = rawData.production_plan || [];
+
+        // Build product name lookup from KHSX
+        const productNameMap = {};
+        production_plan.forEach(p => {
+            if (p.product_id) productNameMap[p.product_id] = p.product_name || p.product_id;
+        });
+
+        // Build NPL → products map from file 3 (demand per product)
+        const nplToProducts = {};
+        demand_per_product.forEach(d => {
+            if (!d.npl_code) return;
+            if (!nplToProducts[d.npl_code]) nplToProducts[d.npl_code] = {};
+            const pname = d.product_name || productNameMap[d.product_code] || '';
+            nplToProducts[d.npl_code][d.product_code] = {
+                code: d.product_code,
+                name: pname,
+                total: (nplToProducts[d.npl_code][d.product_code]?.total || 0) + (d.total || 0)
+            };
+        });
 
         const familyMap = buildFamilyMap(npl_master, substitute_groups);
         const invByCode = aggregateInventory(inventory_lots);
@@ -160,8 +181,23 @@ const NPLCalculator = (function() {
             const total_cost_3m = shortage_3m * unitPrice;
             const total_cost_6m = shortage_6m * unitPrice;
             const total_cost_9m = shortage_9m * unitPrice;
-            // Parse products_used: comma/semicolon separated codes
-            const productsUsed = npl.products_used ? String(npl.products_used).split(/[,;|\s]+/).filter(Boolean) : [];
+            // Aggregate products used from file 3 (demand_per_product) - across family
+            const productsMap = {};
+            family.forEach(famCode => {
+                const ps = nplToProducts[famCode] || {};
+                Object.keys(ps).forEach(pCode => {
+                    if (!productsMap[pCode]) productsMap[pCode] = { code: pCode, name: ps[pCode].name, total: 0, via: new Set() };
+                    productsMap[pCode].total += ps[pCode].total;
+                    productsMap[pCode].via.add(famCode);
+                });
+            });
+            // Also from Data MH "Sản phẩm sử dụng" manual column
+            if (npl.products_used) {
+                String(npl.products_used).split(/[,;|\s]+/).filter(Boolean).forEach(p => {
+                    if (!productsMap[p]) productsMap[p] = { code: p, name: productNameMap[p] || '', total: 0, via: new Set() };
+                });
+            }
+            const productsUsed = Object.values(productsMap).map(p => ({...p, via: Array.from(p.via)}));
             const selfLots = (invByCode[npl.code] || { lots: [] }).lots;
             const expiry = analyzeExpiry(selfLots);
             const subGroupMembers = npl.substitute_group ? (substitute_groups[npl.substitute_group] || []) : [];

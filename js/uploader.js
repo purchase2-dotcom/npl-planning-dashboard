@@ -204,6 +204,26 @@ const NPLUploader = (function() {
         }).filter(Boolean);
     }
 
+    function parseDemandPerProduct(workbook) {
+        const sheet = workbook.Sheets['Nguyên liệu cần thiết'] || workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
+        const result = [];
+        rows.forEach(r => {
+            const code = clean(r['Mã NPL']);
+            const productCode = clean(r['Mã SP'] || r['Mã sản phẩm']);
+            if (!code || !productCode) return;
+            result.push({
+                npl_code: code,
+                npl_name: clean(r['Tên NPL']),
+                product_code: productCode,
+                product_name: clean(r['Tên SP'] || r['Tên sản phẩm']),
+                unit: clean(r['Đơn vị tính']),
+                total: toNum(r['SL Tổng'])
+            });
+        });
+        return result;
+    }
+
     function parseDemandTotal(workbook) {
         const sheet = workbook.Sheets['Báo cáo nguyên phụ liệu'] || workbook.Sheets[workbook.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
@@ -277,10 +297,9 @@ const NPLUploader = (function() {
                         merged.demand_total = merged.demand_total.concat(data);
                         count = data.length;
                     } else if (type === 'demand_per_product') {
-                        const sheet = wb.Sheets[wb.SheetNames[0]];
-                        const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
-                        merged.demand_per_product = merged.demand_per_product.concat(rows);
-                        count = rows.length;
+                        const data = parseDemandPerProduct(wb);
+                        merged.demand_per_product = merged.demand_per_product.concat(data);
+                        count = data.length;
                     } else if (type === 'production_plan') {
                         const data = parseProductionPlan(wb);
                         merged.production_plan = merged.production_plan.concat(data);
