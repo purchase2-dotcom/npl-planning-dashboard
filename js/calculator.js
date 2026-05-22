@@ -97,6 +97,90 @@ const NPLCalculator = (function() {
         return { expired, expiring_3m, expiring_6m, expiring_12m, lots: expiringLots };
     }
 
+    /**
+     * Tính khuyến nghị đặt hàng:
+     * - latest_order_date: ngày trễ nhất phải đặt = ngày bắt đầu thiếu - leadtime
+     * - days_until_must_order: số ngày còn lại để đặt
+     * - recommended_qty: số lượng nên đặt (cân giữa nhu cầu, hạn dùng, phân bố tháng)
+     * - reason: lý do
+     */
+    function calculateOrderRecommendation(monthlyDemand, totalInventory, leadtimeMonths, shelflifeYears, firstShortageMonth) {
+        const today = new Date();
+        const daysPerMonth = 30;
+        const leadtimeDays = (leadtimeMonths || 1) * daysPerMonth;
+
+        if (firstShortageMonth < 0) {
+            return {
+                must_order: false,
+                latest_date: null,
+                days_left: null,
+                recommended_qty: 0,
+                reason: 'Đủ tồn cho 12 tháng tới, chưa cần đặt'
+            };
+        }
+
+        // Tháng bắt đầu thiếu → ngày bắt đầu thiếu
+        const shortageStartDate = new Date(today);
+        shortageStartDate.setDate(shortageStartDate.getDate() + firstShortageMonth * daysPerMonth);
+
+        // Ngày trễ nhất phải đặt = ngày bắt đầu thiếu - leadtime
+        const latestOrderDate = new Date(shortageStartDate);
+        latestOrderDate.setDate(latestOrderDate.getDate() - leadtimeDays);
+
+        const daysLeft = Math.floor((latestOrderDate - today) / (1000 * 60 * 60 * 24));
+
+        // Lượng đề xuất: cân giữa shortage và shelf life
+        // Tính nhu cầu trong khoảng [today + leadtime, today + leadtime + min(shelflife, 12mo)]
+        const shelflifeMonths = shelflifeYears > 0 ? Math.min(shelflifeYears * 12, 12) : 12;
+        const startMonth = leadtimeMonths || 1;
+        const endMonth = Math.min(startMonth + shelflifeMonths, 12);
+
+        let demandInWindow = 0;
+        for (let m = startMonth; m < endMonth; m++) {
+            demandInWindow += monthlyDemand[m] || 0;
+        }
+        // Trừ tồn hiện tại
+        const recommendedQty = Math.max(0, demandInWindow - totalInventory);
+
+        // Phân bố tháng có đều hay không
+        const monthsWithDemand = monthlyDemand.slice(0, 12).filter(d => d > 0).length;
+        const evenness = monthsWithDemand >= 6 ? 'đều' : monthsWithDemand >= 3 ? 'tương đối đều' : 'không đều';
+
+        let reason;
+        if (daysLeft < 0) {
+            reason = '🚨 ĐÃ TRỄ ' + Math.abs(daysLeft) + ' ngày - đặt NGAY không chờ. Lịch SX sẽ bị thiếu hàng.';
+        } else if (daysLeft <= 7) {
+            reason = '⏰ Còn ' + daysLeft + ' ngày để đặt PO, kế hoạch SX bắt đầu T' + firstShortageMonth;
+        } else if (daysLeft <= 30) {
+            reason = '📅 Đặt trong tháng này (' + daysLeft + ' ngày nữa)';
+        } else {
+            reason = 'Đặt trước ' + latestOrderDate.toLocaleDateString('vi-VN') + ' (còn ' + daysLeft + ' ngày)';
+        }
+
+        // Cân nhắc shelf life
+        let qtyAdvice = '';
+        if (shelflifeYears > 0 && shelflifeYears < 1) {
+            const fullDemand12m = monthlyDemand.reduce((s, v) => s + v, 0);
+            if (recommendedQty < fullDemand12m * 0.6) {
+                qtyAdvice = ' · Hạn dùng ngắn (' + shelflifeYears + ' năm) - chia nhiều đợt nhỏ thay vì 1 lô lớn.';
+            }
+        }
+        if (evenness !== 'đều') {
+            qtyAdvice += ' · Nhu cầu ' + evenness + ' - cân nhắc đặt đúng thời điểm cao điểm.';
+        }
+
+        return {
+            must_order: recommendedQty > 0,
+            latest_date: latestOrderDate,
+            latest_date_str: latestOrderDate.toLocaleDateString('vi-VN'),
+            days_left: daysLeft,
+            recommended_qty: Math.round(recommendedQty),
+            window_months: endMonth - startMonth,
+            reason: reason + qtyAdvice,
+            evenness: evenness
+        };
+    }
+
     function determineUrgency(shortageByMonth, leadtimeMonths) {
         for (let m = 0; m <= 11; m++) {
             if (shortageByMonth[m] > 0) {
@@ -162,6 +246,23 @@ const NPLCalculator = (function() {
         const masterByCode = {};
         npl_master.forEach(m => masterByCode[m.code] = m);
 
+        // Build name lookup from ALL sources (Tồn kho, file 3, file 4)
+        const nameMap = {};
+        inventory_lots.forEach(lot => { if (lot.code && lot.name && !nameMap[lot.code]) nameMap[lot.code] = lot.name; });
+        demand_total.forEach(d => { if (d.code && d.name && !nameMap[d.code]) nameMap[d.code] = d.name; });
+        demand_per_product.forEach(d => { if (d.npl_code && d.npl_name && !nameMap[d.npl_code]) nameMap[d.npl_code] = d.npl_name; });
+        // Same for unit
+        const unitMap = {};
+        inventory_lots.forEach(lot => { if (lot.code && lot.unit && !unitMap[lot.code]) unitMap[lot.code] = lot.unit; });
+        demand_total.forEach(d => { if (d.code && d.unit && !unitMap[d.code]) unitMap[d.code] = d.unit; });
+        demand_per_product.forEach(d => { if (d.npl_code && d.unit && !unitMap[d.npl_code]) unitMap[d.npl_code] = d.unit; });
+
+        // Enrich npl_master with fallback name/unit
+        npl_master.forEach(m => {
+            if (!m.name || m.name === m.code) m.name = nameMap[m.code] || m.name || m.code;
+            if (!m.unit) m.unit = unitMap[m.code] || '';
+        });
+
         const items = npl_master.map(npl => {
             const family = familyMap[npl.code] || [npl.code];
             const breakdown = family.map(code => {
@@ -191,6 +292,14 @@ const NPLCalculator = (function() {
             const shortage_6m = shortageByMonth.slice(0, 6).reduce((s, v) => s + v, 0);
             const shortage_9m = shortageByMonth.slice(0, 9).reduce((s, v) => s + v, 0);
             const urgency = determineUrgency(shortageByMonth, npl.leadtime_months);
+            const firstShortageMonth = shortageByMonth.findIndex(s => s > 0);
+            const orderRec = calculateOrderRecommendation(
+                monthlyDemand,
+                totalFamilyInv + incoming.total,
+                npl.leadtime_months,
+                npl.shelflife_years,
+                firstShortageMonth
+            );
             const unitPrice = npl.unit_price || 0;
             const total_cost_t0 = shortage_t0 * unitPrice;
             const total_cost_3m = shortage_3m * unitPrice;
@@ -245,7 +354,8 @@ const NPLCalculator = (function() {
                 incoming_total: incoming.total, incoming_pos: incoming.pos,
                 urgency, expiry, substitute_group_members: subGroupMembers,
                 total_cost_t0, total_cost_3m, total_cost_6m, total_cost_9m,
-                products_used_list: productsUsed
+                products_used_list: productsUsed,
+                order_recommendation: orderRec
             });
         });
 

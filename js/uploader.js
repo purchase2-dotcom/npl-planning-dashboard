@@ -206,31 +206,59 @@ const NPLUploader = (function() {
 
     function parseDemandPerProduct(workbook) {
         const sheet = workbook.Sheets['Nguyên liệu cần thiết'] || workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
-        const result = [];
-        rows.forEach(r => {
-            const code = clean(r['Mã NPL']);
-            const productCode = clean(r['Mã SP'] || r['Mã sản phẩm']);
-            if (!code || !productCode) return;
-            const monthly = [];
-            for (let m = 0; m <= 11; m++) {
-                const v = r['SL T' + m] !== undefined ? r['SL T' + m] : (m === 2 ? r['ST L2'] : null);
-                monthly.push(toNum(v));
+        // Use header:1 to get rows as arrays - more robust against header typos
+        const arr = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+        if (arr.length < 2) return [];
+        const headers = (arr[0] || []).map(h => clean(h).toLowerCase());
+        // Find columns by partial match
+        const findCol = (...keywords) => {
+            for (const kw of keywords) {
+                const idx = headers.findIndex(h => h.indexOf(kw) >= 0);
+                if (idx >= 0) return idx;
             }
+            return -1;
+        };
+        const idxNPL = findCol('mã npl', 'mã nguyên', 'mã nl');
+        const idxNPLName = findCol('tên npl', 'tên nguyên', 'tên nl');
+        const idxUnit = findCol('đơn vị', 'đvt');
+        const idxSP = findCol('mã sp', 'mã sản phẩm');
+        const idxSPName = findCol('tên sp', 'tên sản phẩm');
+        const idxTotal = findCol('sl tổng', 'tổng');
+        // Find monthly columns: any column matching "sl t0", "sl t1"..."sl t11", or "st l2" (typo)
+        const monthCols = new Array(12).fill(-1);
+        headers.forEach((h, i) => {
+            const m = h.match(/(?:sl|st)\s*[tl]\s*(\d{1,2})/);
+            if (m) {
+                const monthNum = parseInt(m[1]);
+                if (monthNum >= 0 && monthNum <= 11) monthCols[monthNum] = i;
+            }
+        });
+        const idxQ1 = findCol('sl q1', 'q1');
+        const idxQ2 = findCol('sl q2', 'q2');
+        const idxQ3 = findCol('sl q3', 'q3');
+        const idxQ4 = findCol('sl q4', 'q4');
+
+        const result = [];
+        for (let r = 1; r < arr.length; r++) {
+            const row = arr[r] || [];
+            const code = clean(row[idxNPL]);
+            const productCode = clean(row[idxSP]);
+            if (!code || !productCode) continue;
+            const monthly = monthCols.map(ci => ci >= 0 ? toNum(row[ci]) : 0);
             result.push({
                 npl_code: code,
-                npl_name: clean(r['Tên NPL']),
+                npl_name: clean(row[idxNPLName]),
                 product_code: productCode,
-                product_name: clean(r['Tên SP'] || r['Tên sản phẩm']),
-                unit: clean(r['Đơn vị tính']),
+                product_name: clean(row[idxSPName]),
+                unit: clean(row[idxUnit]),
                 monthly: monthly,
-                q1: toNum(r['SL Q1']),
-                q2: toNum(r['SL Q2']),
-                q3: toNum(r['SL Q3']),
-                q4: toNum(r['SL Q4']),
-                total: toNum(r['SL Tổng'])
+                q1: idxQ1 >= 0 ? toNum(row[idxQ1]) : 0,
+                q2: idxQ2 >= 0 ? toNum(row[idxQ2]) : 0,
+                q3: idxQ3 >= 0 ? toNum(row[idxQ3]) : 0,
+                q4: idxQ4 >= 0 ? toNum(row[idxQ4]) : 0,
+                total: idxTotal >= 0 ? toNum(row[idxTotal]) : monthly.reduce((s, v) => s + v, 0)
             });
-        });
+        }
         return result;
     }
 

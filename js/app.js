@@ -228,9 +228,32 @@ const App = {
         const self = this;
         tbody.innerHTML = items.map(i => {
             const demand6m = i.monthly_demand.slice(0, 6).reduce((s, v) => s + v, 0);
-            const expSoon = i.expiry.expiring_3m + i.expiry.expiring_6m;
-            const risk = expSoon > demand6m ? '⚠️ Hết hạn trước khi dùng hết' : '✓ Ổn';
-            const riskColor = expSoon > demand6m ? 'var(--danger)' : 'var(--success)';
+            const demand3m = i.monthly_demand.slice(0, 3).reduce((s, v) => s + v, 0);
+            const firstDemandMonth = i.monthly_demand.findIndex(d => d > 0);
+            // Hướng xử lý cụ thể
+            let action = '✓ Ổn - dùng theo FEFO';
+            let actionColor = 'var(--success)';
+            if (i.expiry.expired > 0) {
+                action = '⛔ THANH LÝ ' + self.fmt(i.expiry.expired) + ' ' + (i.unit||'') + ' đã hết hạn';
+                actionColor = 'var(--danger)';
+            } else if (firstDemandMonth > 3 && i.expiry.expiring_3m > 0) {
+                action = '🚨 ĐẨY LỊCH SX SỚM lên trước T3 để dùng ' + self.fmt(i.expiry.expiring_3m) + ' ' + (i.unit||'') + ' sắp hết hạn';
+                actionColor = 'var(--danger)';
+            } else if (i.expiry.expiring_3m > demand3m) {
+                const waste = i.expiry.expiring_3m - demand3m;
+                if (i.substitute_group) {
+                    action = '⚠️ Tồn dư ' + self.fmt(waste) + ' sẽ hết hạn ≤3T → chuyển sang dùng cho SP của nhóm thay thế ' + i.substitute_group;
+                } else {
+                    action = '⚠️ Tồn dư ' + self.fmt(waste) + ' sẽ hết hạn ≤3T → đẩy lịch SX, bán/trả NCC';
+                }
+                actionColor = 'var(--warning)';
+            } else if (i.expiry.expiring_3m > 0 && demand3m > 0) {
+                action = '⏰ Ưu tiên dùng ' + self.fmt(i.expiry.expiring_3m) + ' lô hết hạn ≤3T trước (FEFO)';
+                actionColor = 'var(--warning)';
+            } else if (i.expiry.expiring_6m > demand6m) {
+                action = '⚠️ Tồn ≤6T dư ' + self.fmt(i.expiry.expiring_6m - demand6m) + ' → cân nhắc giảm mua, bán bớt';
+                actionColor = 'var(--warning)';
+            }
             return '<tr onclick="App.showDetail(\'' + i.code + '\')" style="cursor:pointer">' +
                 '<td><div class="npl-cell-with-unit"><span class="npl-code">' + i.code + '</span><span class="unit-badge">' + (i.unit || '—') + '</span></div></td>' +
                 '<td>' + self.escape(i.name || '—') + '</td>' +
@@ -240,7 +263,7 @@ const App = {
                 '<td class="text-right">' + self.fmt(i.expiry.expiring_12m) + '</td>' +
                 '<td class="text-right">' + self.fmt(i.self_inventory) + '</td>' +
                 '<td class="text-right">' + self.fmt(demand6m) + '</td>' +
-                '<td><span style="color:' + riskColor + '">' + risk + '</span></td>' +
+                '<td style="color:' + actionColor + ';font-weight:600;font-size:12px">' + action + '</td>' +
                 '</tr>';
         }).join('');
     },
@@ -278,6 +301,22 @@ const App = {
         const body = document.getElementById('modal-body');
         const self = this;
         let html = '';
+        // Order recommendation banner
+        const rec = item.order_recommendation;
+        if (rec && rec.must_order) {
+            const bgColor = rec.days_left < 0 ? 'var(--danger-light)' : rec.days_left <= 30 ? 'var(--warning-light)' : 'var(--info-light)';
+            const txtColor = rec.days_left < 0 ? 'var(--danger)' : rec.days_left <= 30 ? 'var(--warning)' : 'var(--info)';
+            html += '<div class="detail-section"><h4>Khuyến nghị đặt hàng</h4>';
+            html += '<div style="background:' + bgColor + ';border-left:4px solid ' + txtColor + ';padding:14px 18px;border-radius:8px">';
+            html += '<div style="font-size:18px;font-weight:700;color:' + txtColor + ';margin-bottom:6px">' + rec.reason + '</div>';
+            html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-top:10px">';
+            html += '<div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:600;letter-spacing:0.5px">Ngày trễ nhất phải đặt</div><div style="font-size:15px;font-weight:700;margin-top:2px">' + rec.latest_date_str + '</div></div>';
+            html += '<div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:600;letter-spacing:0.5px">Còn lại</div><div style="font-size:15px;font-weight:700;margin-top:2px">' + (rec.days_left < 0 ? 'TRỄ ' + Math.abs(rec.days_left) + ' ngày' : rec.days_left + ' ngày') + '</div></div>';
+            html += '<div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:600;letter-spacing:0.5px">Số lượng đề xuất</div><div style="font-size:15px;font-weight:700;margin-top:2px">' + self.fmt(rec.recommended_qty) + ' ' + (item.unit || '') + '</div></div>';
+            html += '<div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;font-weight:600;letter-spacing:0.5px">Bao phủ</div><div style="font-size:15px;font-weight:700;margin-top:2px">' + rec.window_months + ' tháng</div></div>';
+            html += '</div></div></div>';
+        }
+
         html += '<div class="detail-section"><h4>Thông tin cơ bản</h4><div class="detail-grid">';
         html += '<div><span class="detail-label">Phụ trách</span><span class="detail-value">' + (item.buyer || '—') + '</span></div>';
         html += '<div><span class="detail-label">Xuất xứ</span><span class="detail-value">' + (item.origin || '—') + '</span></div>';
