@@ -71,6 +71,27 @@ button { font-family: inherit; cursor: pointer; }
 .topbar-actions { display: flex; align-items: center; gap: 12px; }
 .data-status { font-size: 12px; color: var(--text-muted); background: var(--bg-subtle); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border); }
 
+.context-switcher { display: flex; gap: 2px; background: var(--bg-subtle); padding: 3px; border-radius: 10px; border: 1px solid var(--border); }
+.ctx-btn { padding: 6px 16px; border: none; background: transparent; color: var(--text-muted); font-weight: 600; font-size: 12px; border-radius: 7px; transition: all 0.15s; letter-spacing: 0.5px; }
+.ctx-btn:hover { color: var(--text); }
+.ctx-btn.active { background: var(--gradient-card); color: white; box-shadow: var(--shadow-sm); }
+
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+.chart-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; box-shadow: var(--shadow-sm); }
+.chart-card h4 { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 16px; }
+.donut-wrapper { display: flex; align-items: center; gap: 24px; }
+.donut-legend { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.legend-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.legend-row .legend-value { margin-left: auto; font-weight: 700; color: var(--text); }
+.bar-list { display: flex; flex-direction: column; gap: 8px; }
+.bar-row { display: flex; align-items: center; gap: 12px; font-size: 12px; }
+.bar-row .bar-label { width: 80px; color: var(--text-muted); font-family: monospace; font-weight: 600; flex-shrink: 0; }
+.bar-row .bar-track { flex: 1; height: 22px; background: var(--bg-subtle); border-radius: 6px; overflow: hidden; position: relative; }
+.bar-row .bar-fill { height: 100%; background: var(--gradient-card); border-radius: 6px; transition: width 0.5s; }
+.bar-row .bar-value { width: 80px; text-align: right; font-weight: 700; color: var(--text); flex-shrink: 0; }
+@media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } }
+
 .page-content { padding: 28px; flex: 1; }
 .page { animation: fadeIn 0.3s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }

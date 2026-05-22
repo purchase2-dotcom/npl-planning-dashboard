@@ -56,6 +56,10 @@
                     <p class="page-sub" id="page-subtitle">Tổng quan kế hoạch mua NPL — Phụ trách: My</p>
                 </div>
                 <div class="topbar-actions">
+                    <div class="context-switcher">
+                        <button class="ctx-btn active" data-ctx="DTP">DTP</button>
+                        <button class="ctx-btn" data-ctx="CPC1">CPC1</button>
+                    </div>
                     <span class="data-status" id="data-status">Dữ liệu: chưa upload</span>
                 </div>
             </header>
@@ -87,6 +91,17 @@
                         <div class="kpi-card danger" data-jump="expiry"><div class="kpi-icon">⚠️</div><div class="kpi-content"><div class="kpi-label">Đã hết hạn</div><div class="kpi-value" id="kpi-expired">--</div></div></div>
                         <div class="kpi-card warning" data-jump="expiry"><div class="kpi-icon">⏰</div><div class="kpi-content"><div class="kpi-label">Còn 3 tháng</div><div class="kpi-value" id="kpi-exp3">--</div></div></div>
                         <div class="kpi-card" data-jump="expiry"><div class="kpi-icon">📅</div><div class="kpi-content"><div class="kpi-label">Còn 6-12 tháng</div><div class="kpi-value" id="kpi-exp12">--</div></div></div>
+                    </div>
+
+                    <div class="chart-grid">
+                        <div class="chart-card">
+                            <h4>Phân bố theo mức khẩn cấp</h4>
+                            <div id="chart-urgency" class="donut-wrapper"><div style="color:var(--text-faint);font-size:13px">Chưa có dữ liệu</div></div>
+                        </div>
+                        <div class="chart-card">
+                            <h4>Top 10 NPL có giá trị mua cao nhất (9 tháng)</h4>
+                            <div id="chart-topvalue" class="bar-list"><div style="color:var(--text-faint);font-size:13px">Chưa có dữ liệu</div></div>
+                        </div>
                     </div>
 
                     <div class="card">
@@ -147,10 +162,11 @@
                                     <th class="text-right">Tồn family</th><th class="text-right">Đang về</th>
                                     <th class="text-right">Cần T0</th>
                                     <th class="text-right">Mua T0</th><th class="text-right">Mua 3T</th><th class="text-right">Mua 6T</th><th class="text-right">Mua 9T</th>
-                                    <th class="text-center">TG về (tháng)</th><th class="text-center">Hạn dùng (năm)</th>
+                                    <th class="text-right">Đơn giá</th><th class="text-right">Giá trị 9T</th>
+                                    <th class="text-center">TG về</th><th class="text-center">Hạn dùng</th>
                                     <th>Hình thức</th><th>Mã thay thế</th><th>Mức khẩn</th>
                                 </tr></thead>
-                                <tbody id="purchase-table"><tr><td colspan="15" class="empty-state">Chưa có dữ liệu</td></tr></tbody>
+                                <tbody id="purchase-table"><tr><td colspan="17" class="empty-state">Chưa có dữ liệu</td></tr></tbody>
                             </table>
                         </div>
                     </div>

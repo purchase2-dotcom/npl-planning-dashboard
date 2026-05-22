@@ -155,6 +155,13 @@ const NPLCalculator = (function() {
             const shortage_6m = shortageByMonth.slice(0, 6).reduce((s, v) => s + v, 0);
             const shortage_9m = shortageByMonth.slice(0, 9).reduce((s, v) => s + v, 0);
             const urgency = determineUrgency(shortageByMonth, npl.leadtime_months);
+            const unitPrice = npl.unit_price || 0;
+            const total_cost_t0 = shortage_t0 * unitPrice;
+            const total_cost_3m = shortage_3m * unitPrice;
+            const total_cost_6m = shortage_6m * unitPrice;
+            const total_cost_9m = shortage_9m * unitPrice;
+            // Parse products_used: comma/semicolon separated codes
+            const productsUsed = npl.products_used ? String(npl.products_used).split(/[,;|\s]+/).filter(Boolean) : [];
             const selfLots = (invByCode[npl.code] || { lots: [] }).lots;
             const expiry = analyzeExpiry(selfLots);
             const subGroupMembers = npl.substitute_group ? (substitute_groups[npl.substitute_group] || []) : [];
@@ -168,7 +175,9 @@ const NPLCalculator = (function() {
                 shortage_t0, shortage_3m, shortage_6m, shortage_9m,
                 purchase_t0: shortage_t0, purchase_3m: shortage_3m, purchase_6m: shortage_6m, purchase_9m: shortage_9m,
                 incoming_total: incoming.total, incoming_pos: incoming.pos,
-                urgency, expiry, substitute_group_members: subGroupMembers
+                urgency, expiry, substitute_group_members: subGroupMembers,
+                total_cost_t0, total_cost_3m, total_cost_6m, total_cost_9m,
+                products_used_list: productsUsed
             });
         });
 

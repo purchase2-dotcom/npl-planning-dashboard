@@ -73,6 +73,7 @@ const NPLUploader = (function() {
                     shelflife_years: toNum(r['Hạn dùng (năm)']),
                     safety_stock_type: clean(r['Phân loại TH tính TKAT']),
                     safety_stock_qty: toNum(r['Số lượng TKAT']),
+                    unit_price: toNum(r['Đơn giá'] || r['Đơn giá NSX'] || r['Giá']),
                     classification: clean(r['Phân loại dùng chung']),
                     npl_type: clean(r['Phân loại NL']),
                     products_used: clean(r['Sản phẩm sử dụng']),
