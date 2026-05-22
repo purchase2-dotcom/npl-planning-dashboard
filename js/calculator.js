@@ -132,11 +132,17 @@ const NPLCalculator = (function() {
             if (!d.npl_code) return;
             if (!nplToProducts[d.npl_code]) nplToProducts[d.npl_code] = {};
             const pname = d.product_name || productNameMap[d.product_code] || '';
-            nplToProducts[d.npl_code][d.product_code] = {
-                code: d.product_code,
-                name: pname,
-                total: (nplToProducts[d.npl_code][d.product_code]?.total || 0) + (d.total || 0)
+            const existing = nplToProducts[d.npl_code][d.product_code] || {
+                code: d.product_code, name: pname, total: 0,
+                monthly: new Array(12).fill(0), q1: 0, q2: 0, q3: 0, q4: 0
             };
+            existing.total += d.total || 0;
+            existing.q1 += d.q1 || 0;
+            existing.q2 += d.q2 || 0;
+            existing.q3 += d.q3 || 0;
+            existing.q4 += d.q4 || 0;
+            (d.monthly || []).forEach((v, i) => { existing.monthly[i] += v || 0; });
+            nplToProducts[d.npl_code][d.product_code] = existing;
         });
 
         const familyMap = buildFamilyMap(npl_master, substitute_groups);
@@ -186,15 +192,27 @@ const NPLCalculator = (function() {
             family.forEach(famCode => {
                 const ps = nplToProducts[famCode] || {};
                 Object.keys(ps).forEach(pCode => {
-                    if (!productsMap[pCode]) productsMap[pCode] = { code: pCode, name: ps[pCode].name, total: 0, via: new Set() };
+                    if (!productsMap[pCode]) productsMap[pCode] = {
+                        code: pCode, name: ps[pCode].name, total: 0,
+                        monthly: new Array(12).fill(0), q1: 0, q2: 0, q3: 0, q4: 0,
+                        via: new Set()
+                    };
                     productsMap[pCode].total += ps[pCode].total;
+                    productsMap[pCode].q1 += ps[pCode].q1 || 0;
+                    productsMap[pCode].q2 += ps[pCode].q2 || 0;
+                    productsMap[pCode].q3 += ps[pCode].q3 || 0;
+                    productsMap[pCode].q4 += ps[pCode].q4 || 0;
+                    (ps[pCode].monthly || []).forEach((v, i) => { productsMap[pCode].monthly[i] += v || 0; });
                     productsMap[pCode].via.add(famCode);
                 });
             });
-            // Also from Data MH "Sản phẩm sử dụng" manual column
             if (npl.products_used) {
                 String(npl.products_used).split(/[,;|\s]+/).filter(Boolean).forEach(p => {
-                    if (!productsMap[p]) productsMap[p] = { code: p, name: productNameMap[p] || '', total: 0, via: new Set() };
+                    if (!productsMap[p]) productsMap[p] = {
+                        code: p, name: productNameMap[p] || '', total: 0,
+                        monthly: new Array(12).fill(0), q1: 0, q2: 0, q3: 0, q4: 0,
+                        via: new Set()
+                    };
                 });
             }
             const productsUsed = Object.values(productsMap).map(p => ({...p, via: Array.from(p.via)}));

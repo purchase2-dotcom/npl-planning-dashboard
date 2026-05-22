@@ -188,7 +188,7 @@ const App = {
             .sort((a, b) => b.urgency.score - a.urgency.score || b.purchase_9m - a.purchase_9m);
         const tbody = document.getElementById('purchase-table');
         if (items.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="17" class="empty-state">Không có NPL phù hợp bộ lọc</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="15" class="empty-state">Không có NPL phù hợp bộ lọc</td></tr>';
             return;
         }
         const self = this;
@@ -206,8 +206,6 @@ const App = {
                 '<td class="text-right">' + self.fmt(i.purchase_3m) + '</td>' +
                 '<td class="text-right">' + self.fmt(i.purchase_6m) + '</td>' +
                 '<td class="text-right">' + self.fmt(i.purchase_9m) + '</td>' +
-                '<td class="text-right">' + (i.unit_price ? self.fmt(i.unit_price) : '—') + '</td>' +
-                '<td class="text-right">' + (i.total_cost_9m ? self.fmtMoney(i.total_cost_9m) : '—') + '</td>' +
                 '<td class="text-center">' + (i.leadtime_months || '—') + '</td>' +
                 '<td class="text-center">' + (i.shelflife_years || '—') + '</td>' +
                 '<td>' + (i.purchase_type || '—') + '</td>' +
@@ -309,27 +307,99 @@ const App = {
             html += '<p style="font-size:13px;color:var(--text-muted)">Chưa có thông tin. Upload file <strong>"3. Nhu cầu cần NPL từ T0-T11 (NPL cần cho mỗi sản phẩm)"</strong> để hệ thống tự cross-reference theo cột "Mã SP".</p>';
         } else {
             products.sort((a, b) => b.total - a.total);
-            html += '<table class="data-table" style="margin-top:8px"><thead><tr><th>Mã SP</th><th>Tên sản phẩm</th><th class="text-right">SL tổng cần (12T)</th><th>Mã NPL trong family</th></tr></thead><tbody>';
+            // Table: SP × monthly + quarterly + total + via
+            html += '<div style="overflow-x:auto"><table class="data-table" style="margin-top:8px;font-size:12px">';
+            html += '<thead><tr><th rowspan="2">Mã SP</th><th rowspan="2">Tên sản phẩm</th><th colspan="12" class="text-center">Số lượng cần dùng theo tháng</th><th colspan="4" class="text-center">Theo quý</th><th rowspan="2" class="text-right">Tổng 12T</th><th rowspan="2">Mã NPL family</th></tr>';
+            html += '<tr>';
+            for (let m = 0; m <= 11; m++) html += '<th class="text-right" style="font-size:10px">T' + m + '</th>';
+            html += '<th class="text-right" style="font-size:10px">Q1</th><th class="text-right" style="font-size:10px">Q2</th><th class="text-right" style="font-size:10px">Q3</th><th class="text-right" style="font-size:10px">Q4</th>';
+            html += '</tr></thead><tbody>';
             html += products.map(p => {
-                const viaList = (p.via || []).map(v => '<span class="substitute-tag" style="font-size:10px">' + v + (v === item.code ? ' (chính)' : '') + '</span>').join('');
-                return '<tr><td><span class="npl-code">' + p.code + '</span></td><td>' + self.escape(p.name || '—') + '</td><td class="text-right"><strong>' + self.fmt(p.total) + '</strong></td><td>' + viaList + '</td></tr>';
+                const viaList = (p.via || []).map(v => '<span class="substitute-tag" style="font-size:10px">' + v + (v === item.code ? '★' : '') + '</span>').join('');
+                let row = '<tr><td><span class="npl-code">' + p.code + '</span></td><td>' + self.escape(p.name || '—') + '</td>';
+                (p.monthly || []).forEach(v => {
+                    row += '<td class="text-right" style="' + (v > 0 ? 'color:var(--primary);font-weight:600' : 'color:var(--text-faint)') + '">' + (v ? self.fmt(v) : '—') + '</td>';
+                });
+                row += '<td class="text-right">' + self.fmt(p.q1) + '</td>';
+                row += '<td class="text-right">' + self.fmt(p.q2) + '</td>';
+                row += '<td class="text-right">' + self.fmt(p.q3) + '</td>';
+                row += '<td class="text-right">' + self.fmt(p.q4) + '</td>';
+                row += '<td class="text-right"><strong>' + self.fmt(p.total) + '</strong></td>';
+                row += '<td>' + viaList + '</td></tr>';
+                return row;
             }).join('');
-            html += '</tbody></table>';
+            html += '</tbody></table></div>';
         }
         html += '</div>';
 
-        html += '<div class="detail-section"><h4>Family Inventory (' + item.family_codes.length + ' mã)</h4>';
-        html += '<table class="data-table" style="margin-top:8px"><thead><tr><th>Mã</th><th>Tên</th><th class="text-right">Tồn</th><th>Theo kho</th></tr></thead><tbody>';
+        // Calculate first demand month
+        const firstDemandMonth = item.monthly_demand.findIndex(d => d > 0);
+        const firstDemandLabel = firstDemandMonth < 0 ? 'không có' : 'T' + firstDemandMonth;
+
+        // Cumulative demand for FEFO analysis
+        const cumDemand = [];
+        let cum = 0;
+        item.monthly_demand.forEach(d => { cum += d; cumDemand.push(cum); });
+
+        html += '<div class="detail-section"><h4>Family Inventory + cảnh báo hạn dùng (' + item.family_codes.length + ' mã)</h4>';
+        html += '<p style="font-size:13px;color:var(--text-muted);margin-bottom:8px">Nhu cầu bắt đầu từ: <strong>' + firstDemandLabel + '</strong></p>';
+        html += '<table class="data-table" style="margin-top:4px;font-size:12px"><thead><tr><th>Mã</th><th>Lô</th><th>Kho</th><th class="text-right">SL</th><th>Hạn dùng</th><th>Còn (tháng)</th><th>Cảnh báo</th></tr></thead><tbody>';
+        // Collect all lots from family (FEFO sort: earliest expiry first)
+        const allLots = [];
         item.family_breakdown.forEach(b => {
-            const whBreakdown = Object.entries(b.by_warehouse).map(([w, v]) => w + ': ' + self.fmt(v)).join(' · ') || '—';
-            html += '<tr ' + (b.is_self ? 'style="background:var(--primary-light)"' : '') + '>' +
-                    '<td><span class="npl-code">' + b.code + '</span>' + (b.is_self ? ' <small>(chính)</small>' : '') + '</td>' +
-                    '<td>' + self.escape(b.name || '—') + '</td>' +
-                    '<td class="text-right"><strong>' + self.fmt(b.inventory) + '</strong></td>' +
-                    '<td><small>' + whBreakdown + '</small></td></tr>';
+            (b.lots || []).forEach(lot => {
+                const monthsLeft = lot.expiry ? Math.floor((new Date(lot.expiry) - new Date()) / (1000*60*60*24*30)) : 999;
+                allLots.push({ ...lot, fam_code: b.code, fam_name: b.name, is_self: b.is_self, months_left: monthsLeft });
+            });
         });
+        allLots.sort((a, b) => a.months_left - b.months_left);
+        // Running cumulative usage
+        let used = 0;
+        allLots.forEach(lot => {
+            let warning = '<span style="color:var(--success)">✓ Dùng kịp</span>';
+            let rowStyle = '';
+            if (lot.months_left < 0) {
+                warning = '<span style="color:var(--danger);font-weight:700">⛔ Đã hết hạn — thanh lý</span>';
+                rowStyle = 'background:#fee2e2';
+            } else if (firstDemandMonth < 0) {
+                warning = '<span style="color:var(--warning)">⚠️ Không có KHSX — sẽ hết hạn không dùng</span>';
+                rowStyle = 'background:#fef3c7';
+            } else if (lot.months_left < firstDemandMonth) {
+                // Lô hết hạn TRƯỚC khi có nhu cầu → cảnh báo gấp
+                warning = '<span style="color:var(--danger);font-weight:700">🚨 Hết hạn T' + lot.months_left + ' nhưng SX bắt đầu ' + firstDemandLabel + ' → ĐẨY LỊCH SX SỚM hoặc lô sẽ bị bỏ (' + self.fmt(lot.stock) + ' ' + (item.unit||'') + ')</span>';
+                rowStyle = 'background:#fee2e2';
+            } else {
+                // FEFO: tính cumulative đến tháng hết hạn
+                const demandByExpiry = lot.months_left < 12 ? cumDemand[lot.months_left] : cumDemand[11];
+                if (used >= demandByExpiry) {
+                    // Lô này sẽ KHÔNG được dùng vì cumulative demand đã được phục vụ bằng lô trước
+                    const wasted = lot.stock;
+                    warning = '<span style="color:var(--warning);font-weight:700">⚠️ Lô trước đã đủ - lô này dư '+self.fmt(wasted)+', hết hạn T' + lot.months_left + ' → ĐẨY LỊCH SX SỚM</span>';
+                    rowStyle = 'background:#fef3c7';
+                } else if (used + lot.stock > demandByExpiry) {
+                    // Lô dùng được 1 phần, phần còn lại sẽ hết hạn
+                    const wasted = used + lot.stock - demandByExpiry;
+                    warning = '<span style="color:var(--warning)">⚠️ Dùng được ' + self.fmt(demandByExpiry - used) + ', dư ' + self.fmt(wasted) + ' sẽ hết hạn T' + lot.months_left + '</span>';
+                    rowStyle = 'background:#fef9c3';
+                } else if (lot.months_left <= 3) {
+                    warning = '<span style="color:var(--warning)">⏰ Còn ' + lot.months_left + ' tháng - ưu tiên dùng</span>';
+                }
+                used += lot.stock;
+            }
+            const expDate = lot.expiry ? new Date(lot.expiry).toLocaleDateString('vi-VN') : '—';
+            html += '<tr style="' + rowStyle + '">';
+            html += '<td><span class="npl-code">' + lot.fam_code + '</span>' + (lot.is_self ? '★' : '') + '</td>';
+            html += '<td>' + (lot.lot || '—') + '</td>';
+            html += '<td>' + (lot.warehouse || '—') + '</td>';
+            html += '<td class="text-right">' + self.fmt(lot.stock) + '</td>';
+            html += '<td>' + expDate + '</td>';
+            html += '<td>' + (lot.months_left < 0 ? 'Đã hết' : lot.months_left + 'T') + '</td>';
+            html += '<td>' + warning + '</td>';
+            html += '</tr>';
+        });
+        if (allLots.length === 0) html += '<tr><td colspan="7" class="empty-state">Không có lô tồn nào</td></tr>';
         html += '</tbody></table>';
-        html += '<p style="margin-top:8px;font-size:13px"><strong>Tổng family: ' + self.fmt(item.total_family_inventory) + ' ' + (item.unit || '') + '</strong></p></div>';
+        html += '<p style="margin-top:8px;font-size:13px"><strong>Tổng family: ' + self.fmt(item.total_family_inventory) + ' ' + (item.unit || '') + '</strong> · Tổng nhu cầu 12T: <strong>' + self.fmt(cumDemand[11]) + '</strong></p></div>';
 
         html += '<div class="detail-section"><h4>Nhu cầu & cân đối theo tháng</h4>';
         html += '<table class="data-table" style="margin-top:8px"><thead><tr><th>Tháng</th>';

@@ -212,12 +212,22 @@ const NPLUploader = (function() {
             const code = clean(r['Mã NPL']);
             const productCode = clean(r['Mã SP'] || r['Mã sản phẩm']);
             if (!code || !productCode) return;
+            const monthly = [];
+            for (let m = 0; m <= 11; m++) {
+                const v = r['SL T' + m] !== undefined ? r['SL T' + m] : (m === 2 ? r['ST L2'] : null);
+                monthly.push(toNum(v));
+            }
             result.push({
                 npl_code: code,
                 npl_name: clean(r['Tên NPL']),
                 product_code: productCode,
                 product_name: clean(r['Tên SP'] || r['Tên sản phẩm']),
                 unit: clean(r['Đơn vị tính']),
+                monthly: monthly,
+                q1: toNum(r['SL Q1']),
+                q2: toNum(r['SL Q2']),
+                q3: toNum(r['SL Q3']),
+                q4: toNum(r['SL Q4']),
                 total: toNum(r['SL Tổng'])
             });
         });
